@@ -18,16 +18,16 @@
 
 ```sh
 cd ~/on-jan
-sudo ./venv/bin/python dht11_gpio.py --pin 4
+sudo ./venv/bin/python test/dht11_gpio.py --pin 4
 ```
 
 `--pin 4`는 물리 4번이 아니라 **BCM GPIO4 / 물리 7번**입니다. DATA 배선을 확인한 다음 실행하세요. 2초마다 측정하며 Ctrl+C로 종료합니다.
 
 ```sh
 # 5회 시도 후 종료
-sudo ./venv/bin/python dht11_gpio.py --pin 4 --count 5
+sudo ./venv/bin/python test/dht11_gpio.py --pin 4 --count 5
 # 다른 SW가 처리할 수 있는 JSON Lines
-sudo ./venv/bin/python dht11_gpio.py --pin 4 --json
+sudo ./venv/bin/python test/dht11_gpio.py --pin 4 --json
 ```
 
 GPIO 권한 때문에 sudo를 사용하되 가상환경 Python 경로를 직접 지정합니다. 성공 시 섭씨 온도, 상대습도, UTC 시각을 출력합니다. 실패 시 오류를 출력하고 다음 주기에 다시 시도합니다. 실패값을 정상값이나 0으로 바꾸지 않습니다.
