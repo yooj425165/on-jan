@@ -1,14 +1,28 @@
-# ONJAN
+# 온잔(ONJAN)
 
-Environment-aware music recommendation project for ROBOFEST.
+ROBOFEST 출품을 위한 환경 인식 기반 음악 추천 AI 프로젝트입니다.
+센서 측정값과 사람의 평가를 학습하고, 현재 환경에 어울리는 음악 TOP 3를 추천하는 것이 목표입니다.
 
-## Step 1: Read a CSV
+## 개발 방향과 현재 상태
 
-This first exercise loads a small synthetic CSV with Pandas. No model is
-trained, and no sensor hardware is required.
+1. 환경 분위기 모델: 센서 측정값으로 차분함·활기참·쾌적함을 예측합니다.
+2. 음악 적합도 모델: 예측된 분위기와 음악 특성으로 예상 적합도 점수를 계산합니다.
+3. 추천: 등록된 음악을 점수순으로 정렬해 TOP 3를 선택합니다.
 
-Use Python 3.11 on both Mac and Ubuntu. Create a separate virtual environment
-on each machine; do not copy or commit `.venv`.
+초기 모델 후보는 Scikit-learn의 Random Forest입니다. 신경망 사용은 확정하지 않았습니다.
+Mac에서 개발하고 GitHub의 `main`을 통해 Ubuntu와 코드를 공유합니다.
+최종적으로 PC에서 학습한 모델을 Raspberry Pi 4에서 실행할 예정입니다.
+
+현재는 센서가 도착하기 전의 데이터 처리 연습 단계입니다.
+**실제 데이터 수집, 모델 학습, 추천 성능 검증은 아직 진행하지 않았습니다.**
+기존 `test/` 폴더는 작업과 분석 대상에서 제외합니다.
+
+## 실행 방법
+
+Mac과 Ubuntu에서 Python 3.11을 사용합니다. 각 컴퓨터에 가상환경을 따로 만들며,
+`.venv/`는 GitHub에 올리거나 다른 컴퓨터로 복사하지 않습니다.
+
+프로젝트 폴더에서 처음 한 번 실행합니다.
 
 ```bash
 python3.11 -m venv .venv
@@ -17,75 +31,11 @@ python -m pip install -r requirements.txt
 python load_environment.py
 ```
 
-Run these commands from the repository root. On the development Mac, Python
-3.11 is also available at `/opt/homebrew/bin/python3.11`. Ubuntu must have
-Python 3.11 and its venv support installed before running these commands.
+개발 Mac에서는 `/opt/homebrew/bin/python3.11` 경로로도 Python을 실행할 수 있습니다.
+Ubuntu에는 Python 3.11과 해당 버전의 venv 지원이 먼저 설치되어 있어야 합니다.
+CSV 경로는 실행 파일 위치를 기준으로 찾으므로 터미널의 현재 위치에 의존하지 않습니다.
 
-The script prints the example rows, column types, and missing-value counts.
-It resolves the CSV path relative to the script, not the terminal directory.
-
-## Step 2: Separate inputs and targets
-
-Run `python load_environment.py` to also display the two tables used to
-describe the environment model's learning task:
-
-- `X`: temperature, humidity, illuminance, and noise (sensor inputs).
-- `y`: calmness, energy, and comfort (participant rating targets).
-
-The example produces `X.shape == (3, 4)` and `y.shape == (3, 3)`.
-Each row of X corresponds to the same row of y. Selecting these columns
-does not train a model or split the data into training and evaluation sets.
-
-Environment and participant IDs stay in the original table for tracking and
-future grouped evaluation. They are not included as predictive inputs.
-At inference time, the trained model will receive X and predict the three
-ratings; it will not receive the actual y values.
-
-## Step 3: Validate the data format
-
-Before selecting X and y, `validate_environment()` checks that:
-
-- All required columns and at least one data row exist.
-- Required values are neither missing nor blank.
-- Sensor inputs and rating targets are finite numbers.
-- Atmosphere ratings are between 0 and 1, inclusive.
-- Humidity is between 0 and 100 percent; illuminance and noise are non-negative.
-
-Invalid data raises a `ValueError` naming the problem instead of continuing.
-These are format and basic range checks, not proof of accurate measurements
-or sufficient training data. Noise has no upper bound here because its scale
-has not yet been defined. Negative Celsius temperatures are allowed.
-
-## Example data
-
-`data/examples/environment.csv` contains **invented values only**. They do not
-demonstrate real relationships between sensor readings and human perception.
-Do not use them to report model performance.
-
-For this exercise, one row represents one participant's atmosphere evaluation
-of one environment observation. IDs are fictional. This is a learning schema,
-not the finalized collection format.
-
-| Column | Meaning |
-| --- | --- |
-| environment_id | Environment observation identifier |
-| participant_id | Anonymous participant identifier |
-| temperature | Temperature in degrees Celsius |
-| humidity | Relative humidity in percent |
-| illuminance | Illuminance in lux |
-| noise | Placeholder relative sound amplitude, not decibels |
-| calmness | Participant's calmness rating, represented from 0 to 1 |
-| energy | Participant's liveliness rating, represented from 0 to 1 |
-| comfort | Participant's comfort rating, represented from 0 to 1 |
-
-Before real collection, define the sound measurement procedure, time-window
-statistics, timestamps, and participant rating scale. Repeated ratings of the
-same environment should share an environment ID.
-
-## Workflow
-
-Changes are pushed to `main` from the Mac. On Ubuntu, pull them and install
-dependencies into Ubuntu's own virtual environment:
+이후 Ubuntu에서 최신 코드를 가져올 때는 다음 명령을 실행합니다.
 
 ```bash
 git pull origin main
@@ -94,4 +44,96 @@ python -m pip install -r requirements.txt
 python load_environment.py
 ```
 
-The existing `test/` directory is outside the scope of this work.
+## 파일 구성
+
+| 파일 | 역할 |
+| --- | --- |
+| `data/examples/environment.csv` | 가상 환경 측정값과 분위기 평가 3행 |
+| `load_environment.py` | CSV 읽기, 검증, 입력·정답 분리, 기초 통계 출력 |
+| `requirements.txt` | 필요한 라이브러리와 버전 기록 |
+| `README.md` | 프로젝트 설명, 실행 방법, 단계별 개발 기록 |
+
+## 데이터의 의미
+
+**현재 CSV의 모든 값과 ID는 가상입니다.** 실제 환경과 사람의 평가 사이의 관계를
+입증하는 데이터가 아니며, 모델 성능을 보고하는 데 사용하면 안 됩니다.
+
+한 행은 한 참가자가 한 환경 관측에 대해 남긴 분위기 평가를 의미합니다.
+지금의 구조는 연습용이며 실제 수집용 최종 스키마가 아닙니다.
+
+| 열 | 의미 | 용도 |
+| --- | --- | --- |
+| environment_id | 환경 관측 ID | 추적 및 향후 그룹별 검증 |
+| participant_id | 익명 참가자 ID | 추적 및 향후 그룹별 검증 |
+| temperature | 온도, °C | 입력 X |
+| humidity | 상대 습도, %RH | 입력 X |
+| illuminance | 조도, lux | 입력 X |
+| noise | 상대 음량 예시값, 데시벨 아님 | 입력 X |
+| calmness | 차분함 평가, 0~1 | 정답 y |
+| energy | 공간의 활기참 평가, 0~1 | 정답 y |
+| comfort | 쾌적함 평가, 0~1 | 정답 y |
+
+같은 환경에 대한 여러 참가자의 평가는 같은 환경 ID로 연결합니다.
+실제 수집 전에는 음량 측정 방법, 30초 구간 통계, 측정 시각, 평가 척도와
+학습·검증 데이터 분리 기준을 확정해야 합니다.
+
+## 단계별 개발 기록
+
+### 1단계: 개발 환경 준비와 CSV 읽기
+
+- Mac에 Python 3.11 가상환경 `.venv`를 만들었습니다.
+- `requirements.txt`에 Pandas 2.2.3을 기록하고 설치했습니다.
+- 연습용 CSV 3행을 만들고 `pd.read_csv()`로 읽었습니다.
+- 표 내용, 열별 자료형, 빈칸 개수를 출력했습니다.
+- 실행 결과 3행이 정상적으로 읽혔고, 모든 열의 결측값은 0개였습니다.
+
+CSV를 읽으면 Pandas의 표 객체인 DataFrame이 만들어집니다.
+이 단계의 목적은 학습할 자료를 Python에서 다룰 수 있도록 준비하는 것입니다.
+
+### 2단계: 입력 X와 정답 y 구분
+
+- 센서값 4개 열을 `X`, 사람의 분위기 평가 3개 열을 `y`로 선택했습니다.
+- 환경 ID와 참가자 ID는 입력에서 제외하고 원본 표에 남겼습니다.
+- `X.shape`는 `(3, 4)`, `y.shape`는 `(3, 3)`임을 확인했습니다.
+
+각각 `(행 개수, 열 개수)`를 의미하며 X와 y의 같은 행끼리 짝을 이룹니다.
+CSV 파일을 나눈 것이 아니라 Python 안에서 열을 구분한 것입니다.
+학습용·검증용 데이터 분리와는 다른 작업입니다.
+나중에 추론할 때 모델은 입력 X를 받아 평가를 예측하며 실제 정답 y는 받지 않습니다.
+
+### 3단계: 데이터 형식과 범위 검사
+
+`validate_environment()` 함수를 추가해 다음 조건을 확인합니다.
+
+- 필수 열이 존재하고 데이터가 최소 1행 있어야 합니다.
+- 필수 값이 비어 있거나 공백 문자열이면 안 됩니다.
+- 센서값과 평가값은 무한대가 아닌 유한한 숫자여야 합니다.
+- 분위기 평가값은 0~1, 습도는 0~100이어야 합니다.
+- 조도와 상대 음량은 0 이상이어야 합니다.
+
+잘못된 값은 `ValueError`로 이유를 알리고 실행을 중단합니다.
+영하의 섭씨 온도는 허용하며, 음량의 상한은 측정 척도가 확정되지 않아 정하지 않았습니다.
+누락 열, 빈 데이터, 결측값, 공백 ID, 문자, 무한대, 범위 밖의 값이 거부되는지 확인했습니다.
+정상 경계값과 영하 온도가 허용되는지도 확인했습니다.
+이 검사는 기본 형식 검사이며 실제 측정의 정확성이나 데이터의 충분함을 보장하지 않습니다.
+
+### 4단계: 기초 통계로 데이터 살펴보기
+
+- 입력 X와 정답 y에 각각 `describe()`를 적용해 요약 통계를 출력합니다.
+- `.T`로 행과 열을 바꾸어 항목별 통계를 한 줄에서 읽도록 했습니다.
+- `count`, `mean`, `std`, `min`, `max`를 선택해 개수·평균·표준편차·최솟값·최댓값을 확인합니다.
+
+표준편차는 값이 평균 주변에 얼마나 흩어져 있는지 나타냅니다.
+Pandas의 기본 `std`는 표본 표준편차이며 관측값이 하나뿐이면 계산할 수 없어 `NaN`으로 표시됩니다.
+단위가 다른 열의 표준편차 크기를 그대로 비교해 중요도를 판단하면 안 됩니다.
+여기서 계산하는 것은 CSV의 행들 사이의 통계이며, 센서의 최근 30초 시계열 통계가 아닙니다.
+
+현재 입력 통계에서 온도 평균은 약 24.33°C, 습도 평균은 약 48.33%입니다.
+이는 가상 예제의 계산 결과일 뿐 실제 환경의 특성이나 환경·음악 관계를 나타내지 않습니다.
+이번 단계에서는 모델을 학습하거나 입력값을 정규화하지 않습니다.
+
+## 앞으로 결정할 사항
+
+실제 데이터 수집 스키마와 참가자 평가 절차를 정한 뒤 수집 프로그램을 준비합니다.
+학습 단계에서는 참가자와 환경 세션이 겹쳐 성능이 부풀려지는 문제를 고려해 데이터를 나누고,
+단순 기준 모델과 비교합니다. 가상 데이터의 실행 결과와 실제 데이터의 성능 검증은 구분합니다.

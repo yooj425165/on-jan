@@ -67,6 +67,13 @@ def main():
     print(y.to_string(index=False))
     print(f"y shape (rows, targets): {y.shape}")
 
+    summary_columns = ["count", "mean", "std", "min", "max"]
+    print("\nX summary: statistics across CSV rows, not a 30-second sensor window")
+    print(X.describe().T[summary_columns].round(3).to_string())
+
+    print("\ny summary: synthetic participant ratings")
+    print(y.describe().T[summary_columns].round(3).to_string())
+
 
 if __name__ == "__main__":
     main()
