@@ -24,6 +24,23 @@ Python 3.11 and its venv support installed before running these commands.
 The script prints the example rows, column types, and missing-value counts.
 It resolves the CSV path relative to the script, not the terminal directory.
 
+## Step 2: Separate inputs and targets
+
+Run `python load_environment.py` to also display the two tables used to
+describe the environment model's learning task:
+
+- `X`: temperature, humidity, illuminance, and noise (sensor inputs).
+- `y`: calmness, energy, and comfort (participant rating targets).
+
+The example produces `X.shape == (3, 4)` and `y.shape == (3, 3)`.
+Each row of X corresponds to the same row of y. Selecting these columns
+does not train a model or split the data into training and evaluation sets.
+
+Environment and participant IDs stay in the original table for tracking and
+future grouped evaluation. They are not included as predictive inputs.
+At inference time, the trained model will receive X and predict the three
+ratings; it will not receive the actual y values.
+
 ## Example data
 
 `data/examples/environment.csv` contains **invented values only**. They do not
