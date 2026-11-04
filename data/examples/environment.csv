@@ -1,0 +1,4 @@
+environment_id,participant_id,temperature,humidity,illuminance,noise,calmness,energy,comfort
+EX001,DEMO01,24.5,48,120,0.13,0.8,0.2,0.7
+EX002,DEMO01,27.2,55,450,0.25,0.3,0.8,0.5
+EX003,DEMO02,21.3,42,30,0.08,0.9,0.1,0.8
