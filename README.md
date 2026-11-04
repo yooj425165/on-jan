@@ -41,6 +41,21 @@ future grouped evaluation. They are not included as predictive inputs.
 At inference time, the trained model will receive X and predict the three
 ratings; it will not receive the actual y values.
 
+## Step 3: Validate the data format
+
+Before selecting X and y, `validate_environment()` checks that:
+
+- All required columns and at least one data row exist.
+- Required values are neither missing nor blank.
+- Sensor inputs and rating targets are finite numbers.
+- Atmosphere ratings are between 0 and 1, inclusive.
+- Humidity is between 0 and 100 percent; illuminance and noise are non-negative.
+
+Invalid data raises a `ValueError` naming the problem instead of continuing.
+These are format and basic range checks, not proof of accurate measurements
+or sufficient training data. Noise has no upper bound here because its scale
+has not yet been defined. Negative Celsius temperatures are allowed.
+
 ## Example data
 
 `data/examples/environment.csv` contains **invented values only**. They do not
