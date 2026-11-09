@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ONJAN · Listening Room</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono&family=Noto+Serif+KR:wght@400;600&display=swap');
+:root{--ink:#273c35;--paper:#f4f0e5;--accent:#c44e30}*{box-sizing:border-box}body{margin:0;color:var(--ink);background:radial-gradient(ellipse at top right,#e0e4d2,transparent 65%),var(--paper);font-family:'Noto Serif KR',Georgia,serif;min-height:100vh}main{max-width:850px;margin:auto;padding:60px 24px}header{border-bottom:1px solid #a6afa0;padding-bottom:30px}.label{font:12px 'DM Mono',monospace;letter-spacing:3px}h1{font-size:clamp(36px,7vw,64px);font-weight:400;margin:18px 0}p{line-height:1.8}.status{padding:24px 0;overflow-wrap:anywhere}article{border-top:1px solid #bdc3b4;padding:24px 0;display:flex;gap:20px;align-items:center;justify-content:space-between;animation:reveal .5s ease}h2{font-size:21px;margin:0 0 10px}small{display:block;line-height:1.9}a{color:inherit}button{border:1px solid var(--ink);background:var(--ink);color:var(--paper);padding:13px 22px;cursor:pointer;font:inherit;white-space:nowrap}button:hover{background:var(--accent);border-color:var(--accent)}#stop{background:transparent;color:var(--ink)}#error{color:#a52b19;white-space:pre-wrap}footer{margin-top:36px;font-size:13px}@keyframes reveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@media(max-width:550px){main{padding-top:32px}article{align-items:flex-start;flex-direction:column}}@media(prefers-reduced-motion:reduce){article{animation:none}}
+</style>
+<main>
+<header><div class="label">ONJAN / LOCAL LISTENING ROOM</div><h1>음악이 머무는 곳.</h1><p>곡을 선택하면 라즈베리파이의 USB 스피커에서 재생됩니다.</p><button id="stop">재생 정지 ■</button></header>
+<div class="status" id="status" role="status">연결 중…</div><div id="error" role="alert"></div><section id="tracks"></section>
+<footer>인터넷 스트리밍 없이, 저장된 WAV를 재생합니다.<br>음원 출처 및 라이선스는 각 곡 아래에서 확인하세요.</footer>
+</main>
+<script>
+const token='__TOKEN__';let signature='';
+async function command(path,data={}){try{const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json','X-Onjan-Token':token},body:JSON.stringify(data)});const result=await r.json();if(!r.ok)throw Error(result.error);await refresh()}catch(e){document.querySelector('#error').textContent=e.message}}
+document.querySelector('#stop').onclick=()=>command('/api/stop');
+function link(text,url){const a=document.createElement('a');a.textContent=text;if(/^https:\/\//.test(url)){a.href=url;a.target='_blank';a.rel='noopener noreferrer'}return a}
+async function refresh(){try{const r=await fetch('/api/status');if(!r.ok)throw Error('서버 응답 오류');const s=await r.json();document.querySelector('#status').textContent=(s.playing?'재생 중 — '+s.playing:'재생 대기')+' / '+s.device;document.querySelector('#error').textContent=s.error||'';const next=JSON.stringify(s.tracks);if(next===signature)return;signature=next;const list=document.querySelector('#tracks');list.replaceChildren();if(!s.tracks.length){list.textContent='음원이 없습니다. 라즈베리파이에서 python3 test/download_music.py를 실행하세요.';return}for(const t of s.tracks){const row=document.createElement('article'),info=document.createElement('div'),title=document.createElement('h2');title.textContent=t.file.replace('.wav','').replaceAll('_',' ');info.append(title);if(t.attribution){const a=t.attribution,credit=document.createElement('small');credit.textContent=a.composer+' · 연주 '+a.performer+' · 원본 무수정';info.append(credit);const refs=document.createElement('small');refs.append(link('Wikimedia 원본',a.source),' / ',link(a.license,a.license_url));info.append(refs)}const play=document.createElement('button');play.textContent='재생 ↗';play.onclick=()=>command('/api/play',{file:t.file});row.append(info,play);list.append(row)}}catch(e){document.querySelector('#error').textContent='서버 연결 확인: '+e.message}}
+refresh();setInterval(refresh,1500);
+</script>
+</html>

@@ -8,6 +8,12 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 
+# Set the Spotify Connect device name or ID here, not the speaker port.
+DEVICE = ""
+SONG_QUERY = "Dynamite BTS"
+SONG_URI = ""  # A track URI or URL takes priority over SONG_QUERY.
+
+
 def track_uri(value):
     if value.startswith("spotify:track:"):
         track_id = value.removeprefix("spotify:track:")
@@ -45,10 +51,16 @@ def main():
     source.add_argument("--query", help="Song title and artist; plays the first search result")
     source.add_argument("--uri", help="Spotify track URI or track URL")
     source.add_argument("--devices", action="store_true", help="List Spotify Connect devices")
-    parser.add_argument("--device", help="Exact device name or device ID")
+    parser.add_argument("--device", default=DEVICE, help="Exact device name or device ID")
     args = parser.parse_args()
     if not (args.query or args.uri or args.devices):
-        parser.error("Specify --query, --uri, or --devices.")
+        args.uri = SONG_URI
+        args.query = None if SONG_URI else SONG_QUERY
+    if not args.device and not args.devices:
+        print("Set DEVICE at the top of this file to a device name or ID from the list below.")
+        args.devices = True
+    if not args.devices and not (args.query or args.uri):
+        parser.error("Set SONG_QUERY or SONG_URI in this file, or pass --query / --uri.")
 
     try:
         uri = track_uri(args.uri) if args.uri else None
