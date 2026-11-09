@@ -4,7 +4,7 @@
 
 `download_music.py`로 라이선스가 명시된 클래식 WAV 2곡을 다운로드하고,
 `music_web.py`로 웹에서 선택해 USB 스피커로 재생합니다.
-설치 및 실행은 [MUSIC_WEB.md](MUSIC_WEB.md)를 참고하세요. Python 추가 패키지는 필요 없습니다.
+설치 및 실행은 [MUSIC_WEB.md](MUSIC_WEB.md)를 참고하세요. Flask 설치가 필요합니다.
 
 ## 가상 음악 테스트 (계정 및 추가 설치 불필요)
 

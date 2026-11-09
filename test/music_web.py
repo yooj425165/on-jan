@@ -2,13 +2,15 @@
 
 import argparse
 import atexit
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import secrets
 import shutil
 import subprocess
 import threading
+
+from flask import Flask, Response, jsonify, request
+from werkzeug.exceptions import BadRequest, RequestEntityTooLarge
 
 OUTPUT_DEVICE = "plughw:CARD=UACDemoV10,DEV=0"
 MUSIC_DIR = Path(__file__).resolve().parents[1] / "music"
@@ -73,57 +75,61 @@ class Player:
             return dict(playing=self.current, error=self.error, device=self.device)
 
 
-def make_handler(player):
+def create_app(player=None):
+    app = Flask(__name__, static_folder=None)
+    app.config["MAX_CONTENT_LENGTH"] = 4096
+    player = player if player is not None else Player(OUTPUT_DEVICE)
+    app.extensions["music_player"] = player
     token = secrets.token_urlsafe(32)
 
-    class Handler(BaseHTTPRequestHandler):
-        def respond(self, status, value, content_type="application/json"):
-            body = json.dumps(value, ensure_ascii=False).encode() if content_type == "application/json" else value
-            self.send_response(status)
-            self.send_header("Content-Type", content_type + "; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.end_headers()
-            self.wfile.write(body)
+    @app.after_request
+    def response_headers(response):
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
 
-        def do_GET(self):
-            if self.path == "/":
-                self.respond(200, PAGE.read_bytes().replace(b"__TOKEN__", token.encode()), "text/html")
-            elif self.path == "/api/status":
-                sources = MUSIC_DIR / "sources.json"
-                records = json.loads(sources.read_text(encoding="utf-8")) if sources.exists() else []
-                attribution = {item["file"]: item for item in records}
-                files = [dict(file=p.name, attribution=attribution.get(p.name))
-                         for p in sorted(MUSIC_DIR.glob("*.wav")) if p.is_file() and not p.is_symlink()]
-                self.respond(200, dict(player.status(), tracks=files))
+    @app.get("/")
+    def index():
+        return Response(PAGE.read_text(encoding="utf-8").replace("__TOKEN__", token), mimetype="text/html")
+
+    @app.get("/api/status")
+    def status():
+        sources = MUSIC_DIR / "sources.json"
+        records = json.loads(sources.read_text(encoding="utf-8")) if sources.exists() else []
+        attribution = {item["file"]: item for item in records}
+        files = [dict(file=p.name, attribution=attribution.get(p.name))
+                 for p in sorted(MUSIC_DIR.glob("*.wav")) if p.is_file() and not p.is_symlink()]
+        return jsonify(dict(player.status(), tracks=files))
+
+    @app.post("/api/play")
+    @app.post("/api/stop")
+    def control():
+        # Require the control page's token before accepting playback changes.
+        if request.headers.get("X-Onjan-Token") != token:
+            return jsonify(error="Reload the control page."), 403
+        if not request.is_json:
+            return jsonify(error="Expected application/json"), 400
+        try:
+            data = request.get_json()
+            if not isinstance(data, dict):
+                raise ValueError("Expected a JSON object")
+            if request.path == "/api/play":
+                player.play(data.get("file"))
             else:
-                self.respond(404, dict(error="Not found"))
+                player.stop()
+            return jsonify(player.status())
+        except (ValueError, OSError) as error:
+            return jsonify(error=str(error)), 400
 
-        def do_POST(self):
-            # JSON plus a page-specific token blocks cross-site form requests.
-            if self.headers.get("X-Onjan-Token") != token:
-                self.respond(403, dict(error="Reload the control page."))
-                return
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-                if not 0 < length <= 4096:
-                    raise ValueError("Invalid request size")
-                data = json.loads(self.rfile.read(length))
-                if not isinstance(data, dict):
-                    raise ValueError("Expected a JSON object")
-                if self.path == "/api/play":
-                    player.play(data.get("file"))
-                elif self.path == "/api/stop":
-                    player.stop()
-                else:
-                    self.respond(404, dict(error="Not found"))
-                    return
-                self.respond(200, player.status())
-            except (ValueError, OSError) as error:
-                self.respond(400, dict(error=str(error)))
+    @app.errorhandler(BadRequest)
+    def bad_json(error):
+        return jsonify(error="Invalid JSON request"), 400
 
-    return Handler
+    @app.errorhandler(RequestEntityTooLarge)
+    def too_large(error):
+        return jsonify(error="Request exceeds 4096 bytes"), 413
+
+    return app
 
 
 def main():
@@ -133,14 +139,13 @@ def main():
     args = parser.parse_args()
     player = Player(OUTPUT_DEVICE)
     atexit.register(player.stop)
-    server = ThreadingHTTPServer((args.host, args.port), make_handler(player))
+    app = create_app(player)
     print(f"Open http://<raspberry-pi-IP>:{args.port} | Output: {OUTPUT_DEVICE}", flush=True)
     try:
-        server.serve_forever()
+        app.run(host=args.host, port=args.port, debug=False, use_reloader=False, threaded=True)
     except KeyboardInterrupt:
         pass
     finally:
-        server.server_close()
         player.stop()
 
 

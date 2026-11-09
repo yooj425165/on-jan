@@ -1,14 +1,21 @@
 # 로컬 WAV 웹 플레이어
 
-Spotify 없이 Python 표준 라이브러리와 `aplay`로 재생합니다. Python 패키지 설치는 필요 없습니다.
+Spotify 없이 Flask 웹 서버와 `aplay`로 재생합니다. Python 3.9 이상이 필요합니다.
 브라우저는 리모컨이며 소리는 서버를 실행한 라즈베리파이에서 나옵니다.
 
 라즈베리파이의 온잔 프로젝트 폴더에서:
 
 ```sh
+python3 -m venv .venv-music
+.venv-music/bin/python -m pip install -r test/requirements-music.txt
 python3 test/download_music.py
-python3 test/music_web.py
+.venv-music/bin/python test/music_web.py
 ```
+
+가상환경 생성과 패키지 설치는 처음 한 번만 합니다. `venv` 생성 오류가 나면 Ubuntu에서
+`sudo apt install python3-venv`를 먼저 실행하세요. 이후에는 마지막 서버 실행 명령만 사용합니다.
+Flask 개발 서버를 단일 프로세스로 실행하며, 리로더/디버그 모드는 꺼져 있습니다.
+여러 서버 프로세스를 동시에 실행하지 마세요. 이 플레이어는 단일 프로세스용입니다.
 
 같은 네트워크의 PC/휴대폰에서 `http://라즈베리파이IP:5007`을 엽니다.
 예: `http://172.20.10.2:5007`. 재생/정지 버튼으로 조작합니다. 다른 곡을 재생하면 이전 곡은 멈춥니다.

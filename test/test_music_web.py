@@ -53,5 +53,36 @@ class PlayerTests(unittest.TestCase):
         self.assertIn("USB device busy", result["error"])
 
 
+class WebTests(unittest.TestCase):
+    def setUp(self):
+        self.player = web.Player("test-device")
+        self.addCleanup(self.player.stop)
+        self.client = web.create_app(self.player).test_client()
+        page = self.client.get("/")
+        self.assertEqual(page.status_code, 200)
+        token = page.get_data(as_text=True).split("const token='")[1].split("'")[0]
+        self.headers = {"X-Onjan-Token": token}
+
+    def test_status_and_stop(self):
+        response = self.client.get("/api/status")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("tracks", response.json)
+        self.assertEqual(response.json["device"], "test-device")
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertEqual(self.client.post("/api/stop", json={}, headers=self.headers).status_code, 200)
+
+    def test_missing_token(self):
+        self.assertEqual(self.client.post("/api/stop", json={}).status_code, 403)
+
+    def test_invalid_requests(self):
+        for data in ([], {"file": "../outside.wav"}):
+            response = self.client.post("/api/play", json=data, headers=self.headers)
+            self.assertEqual(response.status_code, 400)
+        response = self.client.post("/api/play", data="{", content_type="application/json", headers=self.headers)
+        self.assertEqual(response.status_code, 400)
+        response = self.client.post("/api/play", data="x" * 5000, content_type="application/json", headers=self.headers)
+        self.assertEqual(response.status_code, 413)
+
+
 if __name__ == "__main__":
     unittest.main()
