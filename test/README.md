@@ -1,5 +1,25 @@
 # 하드웨어 테스트
 
+## 가상 음악 테스트 (계정 및 추가 설치 불필요)
+
+직접 합성한 짧은 멜로디를 WAV로 생성합니다. 실제 곡이나 학습된 추천 모델은 사용하지 않습니다.
+프로젝트 루트에서 실행하며, Mac은 `afplay`, Linux는 `aplay`가 있어야 자동 재생됩니다.
+기본 출력은 시스템 임시 폴더의 `onjan-music`이며 같은 모드의 파일은 덮어씁니다.
+
+```sh
+python test/virtual_music.py --mood calm --play
+python test/virtual_music.py --mood energetic --seconds 15 --play
+# 재생 없이 파일 생성
+python test/virtual_music.py --mood calm --output /tmp/onjan-calm.wav
+```
+
+가상환경을 먼저 활성화하세요. 재생을 중단하려면 Ctrl+C를 누릅니다.
+
+## Spotify 음악 재생
+
+`spotify_play.py`: Spotify에서 곡을 검색하거나 곡 링크를 받아 Connect 기기에서 재생합니다.
+Premium 계정과 앱 인증이 필요합니다. 설치와 실행 방법은 [SPOTIFY.md](SPOTIFY.md)를 참고하세요.
+
 `/home/ubuntu/on-jan` 폴더에서 실행합니다. 가상환경은 `.venv`가 아닌 `venv/bin/python`을 사용합니다.
 
 ## DHT11 온습도 센서
