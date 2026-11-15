@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ONJAN / Hardware desk</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<main>
+  <header><span class="eyebrow">ONJAN · RASPBERRY PI 4</span><span id="connection">연결 중</span></header>
+  <section class="intro"><h1>온잔, 감각을 켜다.</h1><p>빛과 무게, 가까워지는 움직임. 온잔의 센서를 한곳에서 확인하세요.</p></section>
+  <aside><strong>서보 구동 잠금</strong> 외부 V+ 전원 미연결 · 채널 0/1 PWM 출력 OFF · 웹에서는 통신 테스트만 지원합니다.</aside>
+  <section class="grid">
+    <article><span class="eyebrow">01 / LIGHT · I2C</span><h2>주변 밝기</h2><div class="reading"><span id="light-value">—</span><small>lux</small></div><p id="light-status">측정 준비 중</p></article>
+    <article><span class="eyebrow">02 / WEIGHT · GPIO 5, 6</span><h2>컵의 무게</h2><div class="reading"><span id="weight-value">—</span><small>g</small></div><p id="weight-status">측정 준비 중</p><p id="weight-detail"></p></article>
+    <article><span class="eyebrow">03 / DISTANCE · GPIO 23, 24</span><h2>물체와의 거리</h2><div class="reading"><span id="distance-value">—</span><small>cm</small></div><p id="distance-status">측정 준비 중</p></article>
+  </section>
+  <section class="bottom">
+    <article><span class="eyebrow">CALIBRATION</span><h2>무게 기준 맞추기</h2><p>① 플랫폼을 비우고 영점 조정<br>② 실제 무게추를 올리고 g 값을 입력해 보정<br>③ 무게추를 제거하고 측정하세요.</p>
+      <button data-action="tare">영점 조정 / Tare</button>
+      <form id="calibration"><label for="grams">실제 무게추 무게 (g)</label><div class="row"><input id="grams" type="number" min="0.001" step="any" required placeholder="무게추의 실제 값"><button>보정 저장</button></div></form>
+      <p class="hint">음료만 측정하려면 보정 후 빈 컵을 올려 다시 영점 조정하세요. 재시작 시 영점은 다시 맞춰야 합니다.</p>
+    </article>
+    <article><span class="eyebrow">SOUND CHECK / USB AUDIO</span><h2>온잔에서 음악 듣기</h2><p>브라우저가 아닌 Raspberry Pi의 USB 스피커에서 재생합니다.</p><label for="track">WAV 파일</label><select id="track"></select><div class="row"><button id="play">재생</button><button class="secondary" data-action="stop">정지</button></div><p id="music-status"></p><p class="hint" id="audio-device"></p></article>
+  </section>
+  <section class="diagnostics"><h2>연결 기록</h2><p id="pca-status"></p><p id="bus"></p><p>INMP441 마이크: 비활성화 · 카메라 / 디스플레이 / 온습도 센서: 사용 안 함</p><details><summary>통합 센서 데이터 / JSON</summary><pre id="json"></pre></details></section>
+  <div id="message" role="status" aria-live="polite">센서의 실제 응답을 기다립니다.</div>
+  <footer>ONJAN HARDWARE DESK <span>BCM PIN MAP / FINAL</span></footer>
+</main>
+<script>const token = {{ token|tojson }};</script>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body></html>

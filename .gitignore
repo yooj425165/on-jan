@@ -5,3 +5,6 @@ __pycache__/
 .DS_Store
 music/*.wav
 music/*.part
+data/hardware-calibration.json
+data/hardware-calibration.tmp
+.venv-pi/

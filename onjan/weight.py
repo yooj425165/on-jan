@@ -1,0 +1,50 @@
+"""Persist only the measured counts/gram factor; tare each startup."""
+import json
+import math
+
+
+class Weight:
+    def __init__(self, sensor, path, threshold):
+        self.sensor, self.path, self.threshold = sensor, path, threshold
+        self.factor = None
+        self.offset = None
+        self.previous = None
+        if path.exists():
+            self.set_factor(json.loads(path.read_text())["counts_per_g"], save=False)
+
+    def set_factor(self, value, save=True):
+        value = float(value)
+        if not math.isfinite(value) or value == 0:
+            raise ValueError("보정 계수는 0이 아닌 유한한 counts/g 값이어야 합니다.")
+        if save:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = self.path.with_suffix(".tmp")
+            temporary.write_text(json.dumps({"counts_per_g": value}))
+            temporary.replace(self.path)
+        self.factor, self.previous = value, None
+
+    def tare(self):
+        with self.sensor.lock:
+            self.offset = self.sensor.average(15)
+            self.previous = None
+        return {"offset": self.offset}
+
+    def calibrate(self, grams):
+        grams = float(grams)
+        if not math.isfinite(grams) or grams <= 0:
+            raise ValueError("실제 무게추의 양수 g 값을 입력하세요.")
+        with self.sensor.lock:
+            if self.offset is None:
+                raise ValueError("먼저 빈 플랫폼에서 영점을 조정하세요.")
+            self.set_factor((self.sensor.average(15) - self.offset) / grams)
+        return {"counts_per_g": self.factor}
+
+    def read(self):
+        with self.sensor.lock:
+            raw = self.sensor.average()
+            grams = None if self.factor is None or self.offset is None else (raw - self.offset) / self.factor
+            delta = None if grams is None or self.previous is None else grams - self.previous
+            self.previous = grams
+            return {"raw": raw, "g": grams, "delta_g": delta,
+                    "changed": delta is not None and abs(delta) >= self.threshold,
+                    "counts_per_g": self.factor, "tared": self.offset is not None}
