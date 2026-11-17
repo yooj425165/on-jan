@@ -23,6 +23,18 @@
     </article>
     <article><span class="eyebrow">SOUND CHECK / USB AUDIO</span><h2>온잔에서 음악 듣기</h2><p>브라우저가 아닌 Raspberry Pi의 USB 스피커에서 재생합니다.</p><label for="track">WAV 파일</label><select id="track"></select><div class="row"><button id="play">재생</button><button class="secondary" data-action="stop">정지</button></div><p id="music-status"></p><p class="hint" id="audio-device"></p></article>
   </section>
+  <section class="diagnostics"><span class="eyebrow">AI LAB / SYNTHETIC DEMO</span><h2>환경 입력 → AI 예측 → Pi 음악 재생</h2>
+    <p>센서와 독립적인 수동 입력 실습입니다. 가상 데이터로 학습한 점수이며 곡 연결도 임시 규칙입니다.</p>
+    <form id="ai-form" class="grid">
+      <div><label for="ai-lux">조도 (0~1000 lux)</label><input id="ai-lux" type="number" min="0" max="1000" step="any" value="100" required></div>
+      <div><label for="ai-weight">컵 무게 (0~600 g)</label><input id="ai-weight" type="number" min="0" max="600" step="any" value="250" required></div>
+      <div><label for="ai-distance">거리 (2~150 cm)</label><input id="ai-distance" type="number" min="2" max="150" step="any" value="15" required></div>
+      <button id="ai-submit">AI 예측 및 곡 추천</button>
+    </form>
+    <p id="ai-notice" role="status">예측 버튼을 눌러 주세요. 입력을 바꾼 뒤에는 다시 예측해야 합니다.</p>
+    <div id="ai-scores"></div><div id="ai-tracks" class="row"></div>
+    <p class="hint">예측만으로 음악이 자동 재생되지는 않습니다. 추천 곡의 재생 버튼을 누르면 Pi에서 재생됩니다. 점수는 확률이 아닙니다.</p>
+  </section>
   <section class="diagnostics"><h2>연결 기록</h2><p id="pca-status"></p><p id="bus"></p><p>INMP441 마이크: 비활성화 · 카메라 / 디스플레이 / 온습도 센서: 사용 안 함</p><details><summary>통합 센서 데이터 / JSON</summary><pre id="json"></pre></details></section>
   <div id="message" role="status" aria-live="polite">센서의 실제 응답을 기다립니다.</div>
   <footer>ONJAN HARDWARE DESK <span>BCM PIN MAP / FINAL</span></footer>

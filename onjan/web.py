@@ -10,6 +10,7 @@ from werkzeug.exceptions import HTTPException
 
 from .config import Config
 from .service import HardwareService
+from .recommendation import Recommendation
 
 
 def create_app(service):
@@ -17,6 +18,7 @@ def create_app(service):
     app.config["MAX_CONTENT_LENGTH"] = 4096
     token = secrets.token_urlsafe(32)
     control_lock = threading.Lock()
+    recommendation = Recommendation()
 
     @app.after_request
     def headers(response):
@@ -53,6 +55,8 @@ def create_app(service):
                     with service.weight.sensor.lock:
                         service.weight.set_factor(data.get("counts_per_g"))
                     result = {"counts_per_g": service.weight.factor}
+            elif action == "predict":
+                result = recommendation.predict(data)
             elif action == "play":
                 service.player.play(data.get("file"))
                 result = service.player.status()

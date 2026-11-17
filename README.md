@@ -1,9 +1,76 @@
 # 온잔(ONJAN)
 
+## 통합 서비스
+
+새 통합 실행 폴더는 **`onjan_service/`**입니다. 실행 명령은 `python -m onjan_service`이며,
+설치·현재 지원 범위·검증 순서는 [통합 서비스 안내](onjan_service/README.md)를 참고하세요.
+기존 테스트 코드를 재사용해 비동기 명령 처리, AI 예측·Pi WAV 재생, 무게 기반 모터
+시뮬레이션, 선택적 ALSA 마이크 측정을 하나의 웹으로 제공합니다.
+
+## AI 학습 → 저장 → 예측 실습
+
+### 웹에서 예측하고 Pi 스피커로 재생
+
+```bash
+source .venv-pi/bin/activate
+python -m pip install -r requirements-hardware.txt -r requirements-ai.txt
+python -m onjan.ai_demo
+python -m onjan.web
+```
+
+`http://<Pi-IP>:5008`의 **AI LAB**에서 밝기·무게·거리를 직접 입력하고
+예측 버튼을 누르면 분위기 점수와 추천 곡이 표시됩니다. 추천 곡의 재생 버튼은
+기존 Pi ALSA WAV 플레이어를 사용합니다. 센서 초기화 실패와 무관하게 수동 입력으로
+시험할 수 있습니다. WAV는 별도 복사해야 합니다. 예측이 자동 재생을 시작하지는 않습니다.
+
+현재 추천은 학습된 음악 추천 모델이 아니라 `music/demo-profiles.json`의 임의 점수와
+예측 분위기 사이의 유클리드 거리가 가까운 순서입니다. 파일이 실제로 존재하는 곡만
+최대 3개 표시하며 현재 등록 곡은 2개입니다. 이 프로필은 음악 분석/사용자 평가 결과가 아닙니다.
+`onjan/recommendation.py`가 예측과 곡 매칭을 담당합니다. AI 의존성이나 모델이 없으면
+예측 요청에 설치 안내가 나오고 기존 센서·음악 기능은 유지됩니다.
+
+나중에 실제 측정·사용자 평가 CSV로 별도 학습 파이프라인을 만들고 모델을 재학습할 수 있습니다.
+현재 생성기는 가상 데이터를 매번 만들므로 CSV만 바꿔서는 실측 학습으로 전환되지 않습니다.
+입력 순서/단위와 출력 이름을 유지하면 웹 입력·재생 기능을 재사용할 수 있고, 변경 시에는
+스키마 버전·검증·UI도 함께 변경해야 합니다. 실제 모델로 전환할 때는 모델 로더의 source 검사와
+데모 표시도 변경해야 합니다. 새 모델 적용 후 서버를 재시작하세요.
+음악 프로필 역시 실제 사용자 평가나 별도 추천 모델로 교체할 수 있습니다.
+
+센서 없이 Mac 또는 Pi에서 실행하는 가상 데이터 실습입니다.
+실제 사용자 평가나 추천 성능을 검증하는 모델이 아닙니다.
+
+```bash
+# Mac: source .venv/bin/activate / Pi: source .venv-pi/bin/activate
+python -m pip install -r requirements-ai.txt
+python -m onjan.ai_demo
+python -m onjan.ai_demo predict --lux 50 --weight-g 250 --distance-cm 15
+python -m onjan.ai_demo predict --lux 900 --weight-g 250 --distance-cm 15
+```
+
+첫 명령은 가상 데이터 600행 생성, 학습/평가 분리, 평균 예측 기본 모델과
+Random Forest 비교, 모델 저장 및 재로드, 밝기별 예측을 순서대로 보여줍니다.
+`predict`는 저장된 모델만 사용하며 다시 학습하지 않습니다.
+`onjan/ai_demo.py`에 전체 실습 코드가 있습니다.
+
+- 입력: 조도(0~1000 lux), 컵 무게(0~600g), 거리(2~150cm). 이는 실습 데이터 범위입니다.
+- 출력: calmness/energy/comfort의 0~1 예측 점수. 확률이나 모델 정확도가 아닙니다.
+- 가상 정답은 밝기만으로 만든 임의 규칙입니다. 무게와 거리는 학습 입력 형태를
+  연습하기 위한 불필요 변수이며, 사람의 기분과 관계가 있다고 가정하지 않습니다.
+- MAE는 평균 절대 오차입니다. 0.04라면 0~1 점수에서 평균 약 0.04만큼 틀렸다는 뜻입니다.
+- 생성 CSV: `data/examples/ai-demo-generated.csv`; 저장 모델: `artifacts/ai-demo.joblib`.
+  둘 다 재생성 가능하며 Git에서 제외합니다. 외부의 신뢰하지 않는 joblib 파일은 로드하지 마세요.
+- 실제 수집에서는 같은 세션/참가자가 학습·평가에 중복되어 생기는 누출을 고려해야 합니다.
+  이 실습의 무작위 분리는 독립 생성된 가상 행에만 적용합니다.
+- 온습도·마이크는 입력에서 제외했습니다. 기존 `load_environment.py`는 과거 CSV 실습으로 남겨 둡니다.
+- 실제 음악 추천에는 음악 특징 및 사용자 적합도 평가 데이터가 추가로 필요합니다.
+
 ## Raspberry Pi 최종 하드웨어 테스트 웹
 
 최종 BCM 배선으로 BH1750, HX711, HC-SR04P, PCA9685 통신과 USB WAV 음악을
 확인하는 웹을 추가했습니다. 설치와 실행은 [HARDWARE.md](HARDWARE.md)를 참고하세요.
+INMP441 추가 배선 계획도 같은 문서에 기록했습니다: BCLK GPIO18(물리 12),
+WS GPIO19(물리 35), SD GPIO20(물리 38), 3.3V 물리 17, GND/L/R 공통 접지.
+마이크 드라이버·AI 연동은 아직 미구현이며 I2S와 pigpio 동시 동작 검증이 필요합니다.
 외부 서보 전원이 없는 현재 단계에서는 웹의 서보 구동이 잠겨 있습니다.
 아래 AI 개발 기록은 기존 실습 기록입니다.
 

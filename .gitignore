@@ -8,3 +8,6 @@ music/*.part
 data/hardware-calibration.json
 data/hardware-calibration.tmp
 .venv-pi/
+.venv/
+artifacts/
+data/examples/ai-demo-generated.csv

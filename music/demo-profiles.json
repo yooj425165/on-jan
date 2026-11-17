@@ -1,0 +1,7 @@
+{
+  "source": "manual_demo_profiles_not_validated",
+  "tracks": [
+    {"file": "bach_aria.wav", "scores": [0.9, 0.2, 0.7]},
+    {"file": "bach_gavotte.wav", "scores": [0.4, 0.8, 0.7]}
+  ]
+}

@@ -10,12 +10,39 @@ async function command(action, data = {}) {
     const result = await response.json();
     if (!response.ok) throw new Error(result.error);
     el('message').textContent = `완료: ${JSON.stringify(result)}`;
+    return result;
   } catch (error) { el('message').textContent = `오류: ${error.message}`; }
   finally { busy = false; document.querySelectorAll('button').forEach(b => b.disabled = false); }
 }
 document.querySelectorAll('[data-action]').forEach(b => b.onclick = () => command(b.dataset.action));
 el('calibration').onsubmit = event => {event.preventDefault(); command('calibrate', {grams:Number(el('grams').value)});};
 el('play').onclick = () => command('play', {file:el('track').value});
+el('ai-form').onsubmit = async event => {
+  event.preventDefault();
+  if (busy) return;
+  el('ai-scores').replaceChildren();
+  el('ai-tracks').replaceChildren();
+  el('ai-notice').textContent = '예측 중…';
+  const values = {lux:Number(el('ai-lux').value), weight_g:Number(el('ai-weight').value), distance_cm:Number(el('ai-distance').value)};
+  const result = await command('predict', values);
+  if (!result) {el('ai-notice').textContent = '예측 실패. 아래 오류 메시지를 확인하세요.'; return;}
+  el('ai-notice').textContent = `${result.notice} 입력: ${values.lux} lux / ${values.weight_g} g / ${values.distance_cm} cm`;
+  for (const [key, label] of [['calmness','차분함'],['energy','활기참'],['comfort','쾌적함']]) {
+    const row = document.createElement('p');
+    const meter = document.createElement('meter');
+    meter.min = 0; meter.max = 1; meter.value = result.scores[key];
+    meter.setAttribute('aria-label', label);
+    row.append(`${label}: ${result.scores[key].toFixed(3)} `, meter);
+    el('ai-scores').append(row);
+  }
+  for (const [i, track] of result.recommendations.entries()) {
+    const button = document.createElement('button');
+    button.textContent = `${i + 1}. ${track.file} 재생`;
+    button.onclick = () => command('play', {file:track.file});
+    el('ai-tracks').append(button);
+  }
+  if (!result.recommendations.length) el('ai-tracks').textContent = '재생 가능한 등록 WAV가 없습니다. music/ 파일과 demo-profiles.json을 확인하세요.';
+};
 async function refresh() {
   try {
     const response = await fetch('/api/status', {signal:AbortSignal.timeout(20000)});
