@@ -19,19 +19,22 @@ class BH1750:
 
     def read(self):
         from smbus2 import i2c_msg
+        errors = []
         for address in (0x23, 0x5C):
+            stage = "측정 명령 쓰기"
             try:
                 with self.i2c.lock:
                     self.i2c.bus.write_byte(address, 0x20)  # one-shot high resolution
                 time.sleep(0.18)
+                stage = "결과 읽기"
                 with self.i2c.lock:
                     message = i2c_msg.read(address, 2)
                     self.i2c.bus.i2c_rdwr(message)
                 high, low = list(message)
                 return {"lux": ((high << 8) | low) / 1.2, "address": hex(address)}
-            except OSError:
-                continue
-        raise OSError("BH1750: 0x23/0x5C 응답 없음. I2C/전원/ADDR 배선을 확인하세요.")
+            except OSError as exc:
+                errors.append(f"{address:#04x} {stage}: {exc}")
+        raise OSError("BH1750 통신 실패: " + "; ".join(errors))
 
 
 class HX711:

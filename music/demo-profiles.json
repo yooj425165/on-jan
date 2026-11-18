@@ -1,7 +1,165 @@
 {
   "source": "manual_demo_profiles_not_validated",
   "tracks": [
-    {"file": "bach_aria.wav", "scores": [0.9, 0.2, 0.7]},
-    {"file": "bach_gavotte.wav", "scores": [0.4, 0.8, 0.7]}
+    {
+      "file": "bach_aria.wav",
+      "scores": [
+        0.9,
+        0.2,
+        0.7
+      ]
+    },
+    {
+      "file": "bach_gavotte.wav",
+      "scores": [
+        0.4,
+        0.8,
+        0.7
+      ]
+    },
+    {
+      "file": "km_bossa_antigua.wav",
+      "scores": [
+        0.7,
+        0.3,
+        0.75
+      ]
+    },
+    {
+      "file": "km_airport_lounge.wav",
+      "scores": [
+        0.65,
+        0.35,
+        0.75
+      ]
+    },
+    {
+      "file": "km_funkorama.wav",
+      "scores": [
+        0.18,
+        0.82,
+        0.75
+      ]
+    },
+    {
+      "file": "km_edm_detection_mode.wav",
+      "scores": [
+        0.07,
+        0.93,
+        0.75
+      ]
+    },
+    {
+      "file": "km_wallpaper.wav",
+      "scores": [
+        0.48,
+        0.52,
+        0.75
+      ]
+    },
+    {
+      "file": "km_carefree.wav",
+      "scores": [
+        0.38,
+        0.62,
+        0.75
+      ]
+    },
+    {
+      "file": "km_fretless.wav",
+      "scores": [
+        0.46,
+        0.54,
+        0.75
+      ]
+    },
+    {
+      "file": "km_local_forecast_elevator.wav",
+      "scores": [
+        0.64,
+        0.36,
+        0.75
+      ]
+    },
+    {
+      "file": "km_monkeys_spinning_monkeys.wav",
+      "scores": [
+        0.28,
+        0.72,
+        0.75
+      ]
+    },
+    {
+      "file": "km_deliberate_thought.wav",
+      "scores": [
+        0.82,
+        0.18,
+        0.75
+      ]
+    },
+    {
+      "file": "km_dream_culture.wav",
+      "scores": [
+        0.79,
+        0.21,
+        0.75
+      ]
+    },
+    {
+      "file": "km_desert_city.wav",
+      "scores": [
+        0.49,
+        0.51,
+        0.75
+      ]
+    },
+    {
+      "file": "km_whiskey_on_the_mississippi.wav",
+      "scores": [
+        0.27,
+        0.73,
+        0.75
+      ]
+    },
+    {
+      "file": "km_hyperfun.wav",
+      "scores": [
+        0.09,
+        0.91,
+        0.75
+      ]
+    },
+    {
+      "file": "km_the_complex.wav",
+      "scores": [
+        0.14,
+        0.86,
+        0.75
+      ]
+    },
+    {
+      "file": "km_pamgaea.wav",
+      "scores": [
+        0.33,
+        0.67,
+        0.75
+      ]
+    },
+    {
+      "file": "km_mining_by_moonlight.wav",
+      "scores": [
+        0.42,
+        0.58,
+        0.75
+      ]
+    },
+    {
+      "file": "km_life_of_riley.wav",
+      "scores": [
+        0.23,
+        0.77,
+        0.75
+      ]
+    }
   ]
 }

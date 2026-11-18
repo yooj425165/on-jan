@@ -21,7 +21,10 @@ def fetch(url):
 
 def main():
     ROOT.mkdir(exist_ok=True)
-    records = []
+    manifest = ROOT / "sources.json"
+    filenames = {name for name, _ in SOURCES}
+    records = [item for item in json.loads(manifest.read_text(encoding="utf-8"))
+               if item["file"] not in filenames] if manifest.exists() else []
     for filename, title in SOURCES:
         params = urllib.parse.urlencode(dict(action="query", format="json", titles=title,
                                             prop="imageinfo", iiprop="url|extmetadata"))
