@@ -87,18 +87,25 @@ class IntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 202)
         self.assertEqual(client.get('/api/status').status_code, 200)
 
-    def test_manual_prediction_and_play(self):
-        runtime = Runtime("default", hardware=False)
-        runtime.phase = "manual_only"
-        runtime.recommender = Mock()
-        runtime.recommender.predict.return_value = {"recommendations": []}
-        result = runtime._perform('predict', {"source": "manual", "lux": 50, "weight_g": 250, "distance_cm": 15})
-        self.assertEqual(result['input_source'], 'manual')
-        self.assertFalse(result['microphone_used_by_model'])
+    def test_manual_playlist_and_stop(self):
+        runtime = Runtime('default', hardware=False)
+        mood = next(iter(runtime.catalog['lists']))
         with patch.object(runtime.hw.player, 'play') as play:
-            runtime._perform('play', {'file': 'bach_aria.wav'})
-            play.assert_called_once_with('bach_aria.wav')
-        runtime.pool.shutdown()
+            result = runtime._perform('choose', {'mood': mood})
+            play.assert_called_once_with(result['tracks'][0])
+            self.assertEqual(runtime.queue, result['tracks'][1:])
+            runtime._perform('stop', {})
+            self.assertFalse(runtime.queue)
+
+    def test_sensor_quadrants(self):
+        runtime = Runtime('default')
+        runtime._capture_round = Mock()
+        for i, (lux, rms) in enumerate([(149,-46),(149,-45),(150,-46),(150,-45)]):
+            runtime._capture_round.return_value = {'rms_dbfs': rms}
+            runtime.hw.state['light'] = {'data': {'lux': lux}, 'ok': True, 'updated_at': __import__('time').time()}
+            with patch.object(runtime.hw.player, 'play'):
+                result = runtime._perform('measure', {})
+                self.assertEqual(result['mood'], runtime.catalog['quadrants'][i])
 
 
 if __name__ == '__main__':

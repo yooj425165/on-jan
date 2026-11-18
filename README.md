@@ -1,5 +1,7 @@
 # 온잔(ONJAN)
 
+현재 통합 웹은 조도·주변 소리를 기준으로 4개 분위기 목록(30곡)을 재생합니다. 실행: `python -m onjan_service`. AI 모델 관련 설명은 이전 실험용입니다.
+
 ## 통합 서비스
 
 새 통합 실행 폴더는 **`onjan_service/`**입니다. 실행 명령은 `python -m onjan_service`이며,

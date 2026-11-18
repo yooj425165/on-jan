@@ -9,7 +9,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from onjan.config import Config, ROOT
-from onjan.recommendation import Recommendation
+import math
 from onjan.service import HardwareService
 from .automation import Automation
 from .microphone import capture
@@ -25,11 +25,12 @@ class Runtime:
         self.lock = threading.RLock()
         self.stop = threading.Event()
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="onjan-command")
-        self.recommender = Recommendation()
+        self.catalog = json.loads((ROOT / 'music' / 'playlists.json').read_text())
+        self.queue = []
         self.automation = Automation()
         self.phase = "starting"
         self.job = None
-        self.prediction = None
+        self.selection = None
         self.mic = {"status": "disabled" if not self.microphone else "waiting", "data": None}
         self.worker = threading.Thread(target=self._run, name="onjan-runtime")
 
@@ -64,6 +65,16 @@ class Runtime:
                 except ValueError:
                     near = None
                 with self.lock:
+                    if self.queue:
+                        status = self.hw.player.status()
+                        if status['error']:
+                            self.queue.clear()
+                        elif not status['playing']:
+                            try:
+                                self.hw.player.play(self.queue.pop(0))
+                            except (OSError, ValueError) as exc:
+                                self.queue.clear()
+                                self.selection['error'] = str(exc)
                     self.automation.update(grams, time.monotonic(), near)
         except Exception:
             LOG.exception("Runtime failed")
@@ -73,12 +84,12 @@ class Runtime:
         result = self.hw.snapshot()
         with self.lock:
             result.update(phase=self.phase, job=copy.deepcopy(self.job),
-                          prediction=copy.deepcopy(self.prediction),
+                          selection=copy.deepcopy(self.selection), moods=list(self.catalog["lists"]),
                           automation=self.automation.snapshot(), microphone=copy.deepcopy(self.mic))
         return result
 
     def submit(self, action, data):
-        allowed = {"predict", "ambient", "play", "stop", "tare", "calibrate", "automation", "capture"}
+        allowed = {"measure", "choose", "play", "stop", "tare", "calibrate", "automation", "capture"}
         if action not in allowed:
             raise ValueError("지원하지 않는 명령")
         with self.lock:
@@ -102,50 +113,47 @@ class Runtime:
                 self.job.update(status="error", error=str(exc))
 
     def _perform(self, action, data):
-        if action == "ambient":
-            from onjan.ambient_demo import predict
-            from onjan.ai_demo import TARGETS
-
-            sound = self._perform("capture", {})
-            if data.get("lux") is None:
-                lux = self.valid_data(self.hw.snapshot(), "light")["lux"]
-                source = "BH1750"
+        if action in ('measure', 'choose'):
+            if action == 'measure':
+                with self.lock:
+                    self.queue.clear()
+                    self.hw.player.stop()
+                    self.selection = None
+                try:
+                    sound = self._perform('capture', {})
+                    lux = self.valid_data(self.hw.snapshot(), 'light')['lux']
+                    rms = sound['rms_dbfs']
+                    if not math.isfinite(lux) or lux < 0 or not math.isfinite(rms) or rms > 0:
+                        raise ValueError('센서값 범위 오류')
+                except Exception as exc:
+                    raise ValueError(f'{exc} · 분위기를 직접 선택하세요.') from exc
+                bright = lux >= self.catalog['bright_lux']
+                loud = rms >= self.catalog['active_dbfs']
+                mood = self.catalog['quadrants'][int(bright)*2 + int(loud)]
+                reason = f"{lux:.1f} lux ({'밝음' if bright else '어두움'}), {rms:.1f} dBFS ({'활기참' if loud else '조용함'})"
             else:
-                lux, source = float(data["lux"]), "manual"
-            scores, inputs = predict(lux, sound["rms_dbfs"])
-            result = self.recommender.rank(scores, TARGETS)
-            result.update(inputs=inputs, input_source=f"{source}+INMP441", created_at=time.time(),
-                          model_source="synthetic_ambient_v1", microphone_used_by_model=True)
-            record = {"timestamp": result['created_at'], "lux": lux, "lux_source": source,
-                      **sound, "model_inputs": inputs, "recommended": result['recommendations']}
-            with (ROOT / 'data' / 'ambient-features.jsonl').open('a', encoding='utf8') as log:
-                log.write(json.dumps(record, ensure_ascii=False) + '\n')
+                mood = data.get('mood')
+                reason = '직접 선택'
+            if not isinstance(mood, str) or mood not in self.catalog['lists']:
+                raise ValueError('알 수 없는 분위기')
+            available = set(self.hw.snapshot()['tracks'])
+            files = [f for f in self.catalog['lists'][mood] if f in available]
+            if not files:
+                raise ValueError('목록에 재생 가능한 WAV가 없습니다.')
             with self.lock:
-                self.prediction = result
-            return result
-        if action == "predict":
-            source = data.get("source", "manual")
-            if source == "sensors":
-                snapshot = self.hw.snapshot()
-                data = {"lux": self.valid_data(snapshot, "light")["lux"],
-                        "weight_g": self.valid_data(snapshot, "weight")["g"],
-                        "distance_cm": self.valid_data(snapshot, "distance")["cm"]}
-            elif source != "manual":
-                raise ValueError("입력 출처는 manual 또는 sensors")
-            result = self.recommender.predict(data)
-            result["input_source"] = source
-            result["inputs"] = data
-            result["created_at"] = time.time()
-            result["microphone_used_by_model"] = False
+                self.hw.player.play(files[0])
+                self.queue = files[1:]
+                self.selection = dict(mood=mood, reason=reason, tracks=files)
+                return self.selection.copy()
+        if action in ('play', 'stop'):
             with self.lock:
-                self.prediction = result
-            return result
-        if action == "play":
-            self.hw.player.play(data.get("file"))
-            return self.hw.player.status()
-        if action == "stop":
-            self.hw.player.stop()
-            return self.hw.player.status()
+                self.queue.clear()
+                self.selection = None
+                if action == 'stop':
+                    self.hw.player.stop()
+                else:
+                    self.hw.player.play(data.get('file'))
+                return self.hw.player.status()
         if action in ("tare", "calibrate"):
             with self.lock:
                 self.automation.enable(False)

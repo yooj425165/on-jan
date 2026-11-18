@@ -1,7 +1,7 @@
 const $ = id => document.getElementById(id);
-let sending = false, running = false, connected = false, predictionTime = null;
+let sending = false, running = false, connected = false;
 let micEnabled = false;
-function buttons() {document.querySelectorAll('button').forEach(b => b.disabled = sending || running || !connected || (!micEnabled && b.matches('[data-action="capture"],[data-action="ambient"],#ambient-manual')));}
+function buttons() {document.querySelectorAll('button').forEach(b => b.disabled = sending || running || !connected || (!micEnabled && b.matches('[data-action="measure"]')));}
 async function command(action, data={}) {
   if (sending || running) return;
   sending = true; buttons();
@@ -15,9 +15,7 @@ async function command(action, data={}) {
   finally {sending = false; buttons();}
 }
 document.querySelectorAll('[data-action]').forEach(b => b.onclick = () => command(b.dataset.action));
-$('predict').onsubmit = e => {e.preventDefault(); command('predict',{source:'manual',lux:Number($('lux').value),weight_g:Number($('grams').value),distance_cm:Number($('cm').value)});};
-$('ambient-manual').onclick = () => {if ($('lux').reportValidity()) command('ambient',{lux:Number($('lux').value)});};
-$('sensor-predict').onclick = () => command('predict',{source:'sensors'});
+$('choose').onclick = () => command('choose',{mood:$('mood').value});
 $('play').onclick = () => command('play',{file:$('tracks').value});
 $('calibrate').onsubmit = e => {e.preventDefault();command('calibrate',{grams:Number($('known').value)});};
 $('arm').onclick = () => command('automation',{enabled:true});
@@ -49,22 +47,9 @@ async function poll() {
     const labels={disabled:'감지 꺼짐',wait_removal:'컵 제거 대기',waiting:'컵 올리기 대기',moving:'이동 중 (시뮬레이션)',holding:'위치 유지 (시뮬레이션)',returning:'복귀 중 (시뮬레이션)',sensor_unavailable:'무게 센서 오류 / 최신값 없음'};
     $('automation').textContent = `${labels[state.automation.state]} · 완료 ${state.automation.cycles}회`;
     if (state.job) $('message').textContent = `${state.job.action} · ${state.job.status}${state.job.error ? ': '+state.job.error : ''}`;
-    const prediction=state.prediction;
-    if (prediction && prediction.created_at !== predictionTime) {
-      predictionTime=prediction.created_at;
-      $('scores').replaceChildren();$('recommendations').replaceChildren();
-      for (const [key,label] of [['calmness','차분함'],['energy','활기참'],['comfort','쾌적함']]) {
-        const p=document.createElement('p'),meter=document.createElement('meter');
-        meter.min=0;meter.max=1;meter.value=prediction.scores[key];meter.setAttribute('aria-label',label);
-        p.append(`${label} ${prediction.scores[key].toFixed(3)}`,meter);$('scores').append(p);
-      }
-      $('prediction-note').textContent = `${prediction.notice} / ${prediction.input_source} / ${JSON.stringify(prediction.inputs)} / ${new Date(prediction.created_at*1000).toLocaleTimeString()}`;
-      for (const [i,track] of prediction.recommendations.entries()) {
-        const button=document.createElement('button');button.textContent=`${i+1}. ${track.file} · 재생`;
-        button.onclick=()=>command('play',{file:track.file});$('recommendations').append(button);
-      }
-      if (!prediction.recommendations.length) $('recommendations').textContent='등록된 WAV를 music/에 복사하세요.';
-    }
+    if (!$('mood').options.length) $('mood').replaceChildren(...state.moods.map(m=>new Option(m,m)));
+    const sel = state.selection;
+    $('selection').textContent = sel ? `${sel.mood} · ${sel.reason} · ${sel.tracks.length}곡 ${sel.error || ''}` : '분위기를 측정하거나 직접 선택하세요.';
     $('diagnostics').textContent=JSON.stringify(state,null,2);
   } catch(error) {
     connected=false;$('connection').textContent='연결 끊김';

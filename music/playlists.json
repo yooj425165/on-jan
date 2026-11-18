@@ -1,0 +1,50 @@
+{
+  "bright_lux": 150,
+  "active_dbfs": -45,
+  "quadrants": [
+    "고요한 한 잔",
+    "늦은 밤의 재즈바",
+    "해 질 녘의 어쿠스틱",
+    "기분 올리는 밤"
+  ],
+  "lists": {
+    "고요한 한 잔": [
+      "bach_aria.wav",
+      "doc_lena_selyanina__an_die_romanze.wav",
+      "doc_lena_selyanina__der_leiermann.wav",
+      "martin_och_johanna__mellan.wav",
+      "martin_och_johanna__mellanrum.wav",
+      "martin_och_johanna__mellanslag.wav",
+      "martin_och_johanna__mellanting.wav",
+      "martin_och_johanna__mellanfolklig.wav",
+      "martin_och_johanna__mellanlanda.wav"
+    ],
+    "늦은 밤의 재즈바": [
+      "doc_lena_selyanina__vienna_blue.wav",
+      "doc_lena_selyanina__naughty_waltz.wav",
+      "blunderwood__geo_sync_deluxe.wav",
+      "blunderwood__apollo.wav",
+      "blunderwood__columbia.wav",
+      "blunderwood__mir.wav",
+      "blunderwood__salyut.wav"
+    ],
+    "해 질 녘의 어쿠스틱": [
+      "bach_gavotte.wav",
+      "mckell_ross_and_gill__alright.wav",
+      "mckell_ross_and_gill__four_leaf_clover.wav",
+      "mckell_ross_and_gill__summer_s_gone.wav",
+      "mckell_ross_and_gill__pieces.wav",
+      "mckell_ross_and_gill__smile.wav",
+      "mckell_ross_and_gill__remember.wav"
+    ],
+    "기분 올리는 밤": [
+      "marc_burt__twenty_ten.wav",
+      "marc_burt__miles.wav",
+      "redmann__plasma_original_mix.wav",
+      "redmann__solar_rush_original_mix.wav",
+      "redmann__force_of_nature_original_mix.wav",
+      "beat_doctor__lost_the_plot_original_mix.wav",
+      "beat_doctor__on_the_road_2008_remix.wav"
+    ]
+  }
+}
