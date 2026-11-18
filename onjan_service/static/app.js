@@ -1,6 +1,7 @@
 const $ = id => document.getElementById(id);
 let sending = false, running = false, connected = false, predictionTime = null;
-function buttons() {document.querySelectorAll('button').forEach(b => b.disabled = sending || running || !connected);}
+let micEnabled = false;
+function buttons() {document.querySelectorAll('button').forEach(b => b.disabled = sending || running || !connected || (!micEnabled && b.matches('[data-action="capture"],[data-action="ambient"],#ambient-manual')));}
 async function command(action, data={}) {
   if (sending || running) return;
   sending = true; buttons();
@@ -40,7 +41,11 @@ async function poll() {
       $('tracks').dataset.files = JSON.stringify(state.tracks);
     }
     $('player').textContent = state.music.error || (state.music.playing ? `재생 중: ${state.music.playing}` : `재생 대기 · ${state.music.device}`);
-    $('microphone').textContent = JSON.stringify(state.microphone);
+    const addresses = state.i2c_addresses || [];
+    $('i2c-info').textContent = state.phase === 'manual_only' ? '수동 모드: I2C 탐색 안 함' : state.phase === 'starting' ? 'I2C 초기화 중' : `시작 시 I2C: ${addresses.join(', ') || '확인된 주소 없음'} · BH1750 예상: 0x23 / 0x5c`;
+    const mic = state.microphone;
+    micEnabled = mic.status !== 'disabled';
+    $('microphone').textContent = !micEnabled ? '비활성 · arecord -l로 녹음 장치를 확인하고 --microphone 옵션으로 통합 서버를 시작하세요.' : mic.status === 'error' ? `측정 실패: ${mic.error}` : mic.data ? `최근 측정: ${mic.data.rms_dbfs} dBFS (RMS) · 피크 ${mic.data.peak_dbfs} dBFS · ${mic.data.device}` : '측정 대기 · 버튼을 눌러 녹음 장치 응답을 확인하세요.';
     const labels={disabled:'감지 꺼짐',wait_removal:'컵 제거 대기',waiting:'컵 올리기 대기',moving:'이동 중 (시뮬레이션)',holding:'위치 유지 (시뮬레이션)',returning:'복귀 중 (시뮬레이션)',sensor_unavailable:'무게 센서 오류 / 최신값 없음'};
     $('automation').textContent = `${labels[state.automation.state]} · 완료 ${state.automation.cycles}회`;
     if (state.job) $('message').textContent = `${state.job.action} · ${state.job.status}${state.job.error ? ': '+state.job.error : ''}`;
