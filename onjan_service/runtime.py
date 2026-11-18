@@ -2,6 +2,7 @@
 import copy
 import json
 import logging
+import subprocess
 import threading
 import time
 import uuid
@@ -10,9 +11,6 @@ from concurrent.futures import ThreadPoolExecutor
 from onjan.config import Config, ROOT
 from onjan.recommendation import Recommendation
 from onjan.service import HardwareService
-from onjan.sensors import BH1750
-from onjan.i2c import I2C
-from onjan.servo import Servos
 from .automation import Automation
 from .microphone import capture
 
@@ -23,7 +21,7 @@ class Runtime:
     def __init__(self, audio_device, hardware=True, microphone=None):
         self.hw = HardwareService(Config(audio_device=audio_device))
         self.hardware = hardware
-        self.microphone = microphone
+        self.microphone = (microphone or "plughw:CARD=sndrpigooglevoi,DEV=0") if hardware else None
         self.lock = threading.RLock()
         self.stop = threading.Event()
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="onjan-command")
@@ -32,7 +30,7 @@ class Runtime:
         self.phase = "starting"
         self.job = None
         self.prediction = None
-        self.mic = {"status": "disabled" if not microphone else "waiting", "data": None}
+        self.mic = {"status": "disabled" if not self.microphone else "waiting", "data": None}
         self.worker = threading.Thread(target=self._run, name="onjan-runtime")
 
     def start(self):
@@ -42,25 +40,7 @@ class Runtime:
         if not self.hardware:
             self.phase = "manual_only"
             return
-        if not self.microphone:
-            self.hw.start()
-        else:
-            # Avoid pigpio waveform/PCM interference until separately verified.
-            # In this explicit mode initialize I2C only, never open pigpio.
-            try:
-                self.hw.i2c = I2C(1)
-                self.hw.addresses = [hex(a) for a in self.hw.i2c.scan()]
-                self.hw.servos = Servos(self.hw.i2c, self.hw.config)
-                readers = {"light": BH1750(self.hw.i2c).read, "pca": self.hw.servos.probe}
-                for name, reader in readers.items():
-                    thread = threading.Thread(target=self.hw._poll, args=(name, reader))
-                    self.hw.threads.append(thread)
-                    thread.start()
-            except Exception as exc:
-                self.hw.error("light", exc)
-                self.hw.error("pca", exc)
-            for name in ("weight", "distance"):
-                self.hw.error(name, "I2S 격리 모드: pigpio 비활성화. 동시 사용 검증 전입니다.")
+        self.hw.start()
         self.phase = "ready"
 
     @staticmethod
@@ -190,7 +170,7 @@ class Runtime:
             if self.hw.player.status()["playing"]:
                 raise ValueError("주변 소리 측정 전에 음악을 정지하세요.")
             try:
-                result = capture(self.microphone)
+                result = self._capture_round()
             except Exception as exc:
                 with self.lock:
                     self.mic = {"status": "error", "data": None, "error": str(exc)}
@@ -198,6 +178,40 @@ class Runtime:
             with self.lock:
                 self.mic = {"status": "measured", "data": result, "measured_at": time.time()}
             return result
+
+    def _capture_round(self):
+        unit = "onjan-pigpio.service"
+        if subprocess.run(["/usr/bin/systemctl", "is-active", "--quiet", unit]).returncode:
+            raise ValueError("온잔 전용 pigpiod 서비스가 필요합니다. onjan_service/README.md 설정을 확인하세요.")
+        ctl = ["sudo", "-n", "/usr/bin/systemctl"]
+        before = self.hw.snapshot()['sensors']
+        offset = self.hw.weight.offset if self.hw.weight else None
+        stopped = False
+        try:
+            self.hw.stop_gpio()
+            for name in ('weight', 'distance'):
+                self.hw.error(name, '마이크 측정으로 일시 정지')
+            subprocess.run([*ctl, "stop", unit], check=True, timeout=20)
+            stopped = True
+            if subprocess.run(['pgrep', '-x', 'pigpiod']).returncode != 1:
+                raise ValueError('다른 pigpiod가 실행 중입니다. 녹음을 건너뜁니다.')
+            sound = capture(self.microphone)
+            entry = {'measured_at': time.time(), 'before_capture': before, 'microphone': sound}
+            with (ROOT / 'data' / 'measurement-rounds.jsonl').open('a', encoding='utf8') as out:
+                out.write(json.dumps(entry, ensure_ascii=False) + '\n')
+            return sound
+        finally:
+            # Even a failed stop request may have reached systemd (e.g. timeout).
+            if stopped or subprocess.run(["/usr/bin/systemctl", "is-active", "--quiet", unit]).returncode:
+                subprocess.run([*ctl, "start", unit], check=True, timeout=20)
+                for _ in range(30):
+                    import socket
+                    try:
+                        with socket.create_connection(('127.0.0.1', 8888), timeout=.2):
+                            break
+                    except OSError:
+                        time.sleep(.1)
+            self.hw.start_gpio(offset)
 
     def close(self):
         self.stop.set()

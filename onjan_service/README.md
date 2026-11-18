@@ -16,7 +16,7 @@ python -m onjan_service
 
 Pi 브라우저: `http://127.0.0.1:5008`, 다른 기기: `http://<Pi-IP>:5008`.
 Ubuntu UFW를 사용하면 `sudo ufw allow 5008/tcp`. GPIO는 실행 중인 pigpiod가 필요합니다.
-소스 설치한 경우 `sudo /usr/local/bin/pigpiod -l`로 시작합니다.
+버튼으로 GPIO와 I2S를 교대할 때는 아래 **1회 설정**으로 데몬을 온잔 전용 서비스로 관리합니다.
 바흐 피아노 실연 두 곡(골드베르크 변주곡 아리아, 프랑스 모음곡 5번 가보트)은
 `git pull`하면 `music/`에 함께 받아집니다. 연주: eldüendesüarez, CC BY-SA 4.0.
 원본 출처와 라이선스 링크는 `music/sources.json`을 참고하세요.
@@ -26,11 +26,32 @@ Ubuntu UFW를 사용하면 `sudo ufw allow 5008/tcp`. GPIO는 실행 중인 pigp
 python -m onjan_service --no-hardware
 # USB 출력 장치 변경
 python -m onjan_service --audio-device 'plughw:CARD=UACDemoV10,DEV=0'
-# I2S 장치 등록 후, pigpio 센서와 격리한 마이크 시험
+# 기본 마이크(sndrpigooglevoi) 대신 다른 ALSA 장치 선택
 python -m onjan_service --microphone 'plughw:CARD=YOUR_MIC,DEV=0'
 ```
 
 ## 구현 범위
+
+### Pi 최초 1회: 소스로 설치한 pigpiod를 systemd로 관리
+
+기존 웹과 GPIO 테스트를 종료하세요. 다른 앱이 데몬을 사용 중이면 먼저 종료해야 합니다.
+이 명령은 이전 안내대로 수동 실행했던 `/usr/local/bin/pigpiod`를 사용하는 Pi 기준입니다.
+다른 pigpiod.service가 있다면 동시에 실행하지 마세요.
+
+```bash
+cd ~/on-jan
+sudo pkill -x pigpiod   # 기존 수동 데몬이 없으면 생략
+sudo install -m 644 onjan_service/onjan-pigpio.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now onjan-pigpio.service
+sudo visudo -f /etc/sudoers.d/onjan-pigpio
+```
+
+다음 한 줄만 등록합니다(계정이 ubuntu가 아니면 교체). 서버 자체는 sudo로 실행하지 않습니다.
+
+```text
+ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl stop onjan-pigpio.service, /usr/bin/systemctl start onjan-pigpio.service
+```
 
 - 웹을 먼저 실행하고 센서 초기화는 별도 스레드에서 진행합니다.
 - 영점·보정·AI 추론·녹음은 작업 큐에서 수행합니다. POST는 작업 ID와 202를 즉시 반환하고
@@ -50,10 +71,10 @@ python -m onjan_service --microphone 'plughw:CARD=YOUR_MIC,DEV=0'
 - 마이크는 선택적 ALSA 2초 녹음과 dBFS/포화율 측정을 지원합니다. S32_LE, 48kHz,
   스테레오의 왼쪽 채널을 사용하므로 실제 드라이버 지원과 정렬 확인이 필요합니다.
   마이크 추가 핀은 `HARDWARE.md`를 참고하세요. OS의 I2S 드라이버 설정은 별도로 필요합니다.
-- PCM/DMA 자원 충돌 미검증으로 마이크 모드에서는 pigpio(HX711/초음파)를 열지 않습니다.
-  이미 다른 pigpiod가 실행 중이라면 마이크 시험 전 별도로 종료해야 합니다.
-  예: 다른 GPIO 프로그램을 종료한 뒤 `sudo killall pigpiod`.
-  마이크+로드셀 동시 실측은 아직 지원하지 않습니다.
+- **다같이 측정하기**는 직전 센서값과 시각을 확보하고 GPIO 두 작업을 종료한 뒤 전용 데몬을 중지합니다.
+  조도는 계속 수집합니다. 2초 녹음 후 특징과 직전 센서 상태를 `data/measurement-rounds.jsonl`에
+  저장하고, 실패 시에도 데몬 재시작과 센서 재연결을 시도합니다. 같은 순간의 측정은 아닙니다.
+  센서 오류는 0으로 대체하지 않습니다. 전환 중에는 컵 자동화에 이전 값을 재사용하지 않습니다.
 - `python -m onjan.ambient_demo`로 별도 가상 조도·RMS 모델을 생성하세요. 웹의 **조도 + 소리로 추천**은 2초 새 측정과 최신 BH1750 값을 사용합니다. BH1750이 없으면 수동 조도 버튼을 사용하세요. 모델 입력은 0~1000 lux, -90~0 dBFS로 제한합니다. 성공한 추천의 특징과 결과만 `data/ambient-features.jsonl`에 기록하고 음성 파일은 보관하지 않습니다. 음악 재생 중 녹음은 거부해 스피커 자기 소리 혼입을 줄입니다.
 - Ctrl+C/SIGTERM으로 작업과 센서 종료를 기다린 뒤 자원을 정리합니다. 기존 HX711 평균화 등
   진행 중인 I/O는 즉시 취소되지 않으므로 종료에 수 초 걸릴 수 있습니다.

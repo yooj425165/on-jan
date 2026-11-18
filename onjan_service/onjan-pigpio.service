@@ -1,0 +1,9 @@
+[Unit]
+Description=ONJAN dedicated local GPIO timing daemon
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/pigpiod -g -l
+
+[Install]
+WantedBy=multi-user.target

@@ -12,3 +12,4 @@ data/hardware-calibration.tmp
 artifacts/
 data/examples/ai-demo-generated.csv
 data/ambient-features.jsonl
+data/measurement-rounds.jsonl
