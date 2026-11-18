@@ -11,3 +11,4 @@ data/hardware-calibration.tmp
 .venv/
 artifacts/
 data/examples/ai-demo-generated.csv
+data/ambient-features.jsonl

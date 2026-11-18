@@ -22,6 +22,9 @@ class Recommendation:
                 raise ValueError("모델 생성 필요: python -m onjan.ai_demo")
             self.model = load_model(MODEL)
         scores = self.model.predict(frame)[0].tolist()
+        return self.rank(scores, TARGETS)
+
+    def rank(self, scores, targets):
         catalog = json.loads((ROOT / "music" / "demo-profiles.json").read_text())
         available = set(tracks())
         ranked = []
@@ -35,7 +38,7 @@ class Recommendation:
             distance = math.sqrt(sum((a - b) ** 2 for a, b in zip(scores, profile)))
             ranked.append({"file": track["file"], "distance": round(distance, 4)})
         ranked.sort(key=lambda item: (item["distance"], item["file"]))
-        return {"scores": dict(zip(TARGETS, scores)), "recommendations": ranked[:3],
+        return {"scores": dict(zip(targets, scores)), "recommendations": ranked[:3],
                 "input_source": "manual", "model_source": "synthetic_rule_demo",
                 "matching_source": catalog["source"],
                 "notice": "가상 학습 모델 + 수동 임시 음악 프로필. 실제 추천 성능은 미검증입니다."}

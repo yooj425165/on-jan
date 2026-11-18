@@ -15,6 +15,7 @@ async function command(action, data={}) {
 }
 document.querySelectorAll('[data-action]').forEach(b => b.onclick = () => command(b.dataset.action));
 $('predict').onsubmit = e => {e.preventDefault(); command('predict',{source:'manual',lux:Number($('lux').value),weight_g:Number($('grams').value),distance_cm:Number($('cm').value)});};
+$('ambient-manual').onclick = () => {if ($('lux').reportValidity()) command('ambient',{lux:Number($('lux').value)});};
 $('sensor-predict').onclick = () => command('predict',{source:'sensors'});
 $('play').onclick = () => command('play',{file:$('tracks').value});
 $('calibrate').onsubmit = e => {e.preventDefault();command('calibrate',{grams:Number($('known').value)});};

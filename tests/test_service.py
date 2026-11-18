@@ -11,17 +11,51 @@ class IntegrationTests(unittest.TestCase):
         machine = Automation()
         machine.enable(True)
         for now in (0, 1):
-            machine.update(0, now)
+            machine.update(0, now, False)
         self.assertEqual(machine.state, "waiting")
-        for now in (2, 3, 4, 5, 6):
-            machine.update(250, now)
+        for now in (2, 3, 4):
+            machine.update(250, now, True)
+        self.assertEqual(machine.state, "holding")
+        machine.update(301, 5, True)
+        self.assertEqual(machine.state, "returning")
+        machine.update(301, 6, True)
         self.assertEqual(machine.cycles, 1)
-        machine.update(250, 100)
+        machine.update(250, 100, True)
         self.assertEqual(machine.state, "wait_removal")
         machine.update(None, 101)
-        machine.update(250, 102)
+        machine.update(250, 102, True)
         self.assertEqual(machine.state, "wait_removal")
         self.assertFalse(machine.snapshot()["pwm_enabled"])
+
+    def test_motion_requires_both_conditions_and_strict_limit(self):
+        machine = Automation()
+        machine.enable(True)
+        machine.update(0, 0, False)
+        machine.update(0, 1, False)
+        machine.update(250, 2, False)
+        machine.update(250, 4, False)
+        self.assertEqual(machine.state, "waiting")
+        machine.update(301, 5, True)
+        machine.update(301, 7, True)
+        self.assertEqual(machine.state, "waiting")
+        machine.update(200, 8, True)
+        machine.update(200, 9, True)
+        machine.update(300, 10, True)
+        self.assertEqual(machine.state, "holding")
+        machine.update(300.1, 11, True)
+        self.assertEqual(machine.reason, "weight_limit_exceeded")
+
+    def test_sensor_loss_and_timeout_return(self):
+        for grams, near, now, reason in [(None, True, 4, "sensor_unavailable"),
+                                         (250, False, 4, "object_removed"),
+                                         (250, True, 33, "active_timeout")]:
+            machine = Automation()
+            machine.enable(True)
+            for weight, time in [(0, 0), (0, 1), (250, 2), (250, 3)]:
+                machine.update(weight, time, True)
+            machine.update(grams, now, near)
+            self.assertEqual(machine.state, "returning")
+            self.assertEqual(machine.reason, reason)
 
     def test_invalid_or_stale_sensor_rejected(self):
         with self.assertRaises(ValueError):

@@ -1,12 +1,13 @@
 """Own hardware lifecycle, async commands, and coherent application state."""
 import copy
+import json
 import logging
 import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
-from onjan.config import Config
+from onjan.config import Config, ROOT
 from onjan.recommendation import Recommendation
 from onjan.service import HardwareService
 from onjan.sensors import BH1750
@@ -78,8 +79,12 @@ class Runtime:
                     grams = self.valid_data(snapshot, "weight").get("g")
                 except ValueError:
                     grams = None
+                try:
+                    near = self.valid_data(snapshot, "distance").get("near")
+                except ValueError:
+                    near = None
                 with self.lock:
-                    self.automation.update(grams, time.monotonic())
+                    self.automation.update(grams, time.monotonic(), near)
         except Exception:
             LOG.exception("Runtime failed")
             self.phase = "error"
@@ -93,7 +98,7 @@ class Runtime:
         return result
 
     def submit(self, action, data):
-        allowed = {"predict", "play", "stop", "tare", "calibrate", "automation", "capture"}
+        allowed = {"predict", "ambient", "play", "stop", "tare", "calibrate", "automation", "capture"}
         if action not in allowed:
             raise ValueError("지원하지 않는 명령")
         with self.lock:
@@ -117,6 +122,27 @@ class Runtime:
                 self.job.update(status="error", error=str(exc))
 
     def _perform(self, action, data):
+        if action == "ambient":
+            from onjan.ambient_demo import predict
+            from onjan.ai_demo import TARGETS
+
+            sound = self._perform("capture", {})
+            if data.get("lux") is None:
+                lux = self.valid_data(self.hw.snapshot(), "light")["lux"]
+                source = "BH1750"
+            else:
+                lux, source = float(data["lux"]), "manual"
+            scores, inputs = predict(lux, sound["rms_dbfs"])
+            result = self.recommender.rank(scores, TARGETS)
+            result.update(inputs=inputs, input_source=f"{source}+INMP441", created_at=time.time(),
+                          model_source="synthetic_ambient_v1", microphone_used_by_model=True)
+            record = {"timestamp": result['created_at'], "lux": lux, "lux_source": source,
+                      **sound, "model_inputs": inputs, "recommended": result['recommendations']}
+            with (ROOT / 'data' / 'ambient-features.jsonl').open('a', encoding='utf8') as log:
+                log.write(json.dumps(record, ensure_ascii=False) + '\n')
+            with self.lock:
+                self.prediction = result
+            return result
         if action == "predict":
             source = data.get("source", "manual")
             if source == "sensors":
@@ -154,6 +180,7 @@ class Runtime:
                 grams = self.valid_data(self.hw.snapshot(), "weight").get("g")
                 if grams is None:
                     raise ValueError("무게 보정 및 영점 조정이 필요합니다.")
+                self.valid_data(self.hw.snapshot(), "distance")
             with self.lock:
                 self.automation.enable(enabled)
                 return self.automation.snapshot()
