@@ -18,7 +18,39 @@
       ]
     },
     {
-      "file": "km_bossa_antigua.wav",
+      "file": "doc_lena_selyanina__vienna_blue.wav",
+      "scores": [
+        0.66,
+        0.34,
+        0.75
+      ]
+    },
+    {
+      "file": "doc_lena_selyanina__naughty_waltz.wav",
+      "scores": [
+        0.44,
+        0.56,
+        0.75
+      ]
+    },
+    {
+      "file": "doc_lena_selyanina__an_die_romanze.wav",
+      "scores": [
+        0.78,
+        0.22,
+        0.75
+      ]
+    },
+    {
+      "file": "doc_lena_selyanina__der_leiermann.wav",
+      "scores": [
+        0.83,
+        0.17,
+        0.75
+      ]
+    },
+    {
+      "file": "martin_och_johanna__mellan.wav",
       "scores": [
         0.7,
         0.3,
@@ -26,39 +58,31 @@
       ]
     },
     {
-      "file": "km_airport_lounge.wav",
+      "file": "martin_och_johanna__mellanrum.wav",
       "scores": [
-        0.65,
-        0.35,
+        0.74,
+        0.26,
         0.75
       ]
     },
     {
-      "file": "km_funkorama.wav",
+      "file": "martin_och_johanna__mellanslag.wav",
       "scores": [
-        0.18,
-        0.82,
+        0.62,
+        0.38,
         0.75
       ]
     },
     {
-      "file": "km_edm_detection_mode.wav",
+      "file": "martin_och_johanna__mellanting.wav",
       "scores": [
-        0.07,
-        0.93,
+        0.58,
+        0.42,
         0.75
       ]
     },
     {
-      "file": "km_wallpaper.wav",
-      "scores": [
-        0.48,
-        0.52,
-        0.75
-      ]
-    },
-    {
-      "file": "km_carefree.wav",
+      "file": "mckell_ross_and_gill__alright.wav",
       "scores": [
         0.38,
         0.62,
@@ -66,63 +90,55 @@
       ]
     },
     {
-      "file": "km_fretless.wav",
+      "file": "mckell_ross_and_gill__four_leaf_clover.wav",
       "scores": [
-        0.46,
-        0.54,
+        0.35,
+        0.65,
         0.75
       ]
     },
     {
-      "file": "km_local_forecast_elevator.wav",
+      "file": "mckell_ross_and_gill__summer_s_gone.wav",
       "scores": [
-        0.64,
-        0.36,
+        0.52,
+        0.48,
         0.75
       ]
     },
     {
-      "file": "km_monkeys_spinning_monkeys.wav",
+      "file": "mckell_ross_and_gill__pieces.wav",
       "scores": [
-        0.28,
-        0.72,
+        0.55,
+        0.45,
         0.75
       ]
     },
     {
-      "file": "km_deliberate_thought.wav",
+      "file": "mckell_ross_and_gill__smile.wav",
       "scores": [
-        0.82,
-        0.18,
+        0.43,
+        0.57,
         0.75
       ]
     },
     {
-      "file": "km_dream_culture.wav",
+      "file": "marc_burt__twenty_ten.wav",
       "scores": [
-        0.79,
-        0.21,
+        0.04,
+        0.96,
         0.75
       ]
     },
     {
-      "file": "km_desert_city.wav",
+      "file": "marc_burt__miles.wav",
       "scores": [
-        0.49,
-        0.51,
+        0.17,
+        0.83,
         0.75
       ]
     },
     {
-      "file": "km_whiskey_on_the_mississippi.wav",
-      "scores": [
-        0.27,
-        0.73,
-        0.75
-      ]
-    },
-    {
-      "file": "km_hyperfun.wav",
+      "file": "redmann__plasma_original_mix.wav",
       "scores": [
         0.09,
         0.91,
@@ -130,34 +146,18 @@
       ]
     },
     {
-      "file": "km_the_complex.wav",
+      "file": "redmann__solar_rush_original_mix.wav",
       "scores": [
-        0.14,
-        0.86,
+        0.32,
+        0.68,
         0.75
       ]
     },
     {
-      "file": "km_pamgaea.wav",
+      "file": "redmann__force_of_nature_original_mix.wav",
       "scores": [
-        0.33,
-        0.67,
-        0.75
-      ]
-    },
-    {
-      "file": "km_mining_by_moonlight.wav",
-      "scores": [
-        0.42,
-        0.58,
-        0.75
-      ]
-    },
-    {
-      "file": "km_life_of_riley.wav",
-      "scores": [
-        0.23,
-        0.77,
+        0.13,
+        0.87,
         0.75
       ]
     }
