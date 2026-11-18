@@ -17,7 +17,9 @@ python -m onjan_service
 Pi 브라우저: `http://127.0.0.1:5008`, 다른 기기: `http://<Pi-IP>:5008`.
 Ubuntu UFW를 사용하면 `sudo ufw allow 5008/tcp`. GPIO는 실행 중인 pigpiod가 필요합니다.
 소스 설치한 경우 `sudo /usr/local/bin/pigpiod -l`로 시작합니다.
-WAV는 Git 제외 파일이므로 `music/`에 별도로 복사하세요.
+바흐 피아노 실연 두 곡(골드베르크 변주곡 아리아, 프랑스 모음곡 5번 가보트)은
+`git pull`하면 `music/`에 함께 받아집니다. 연주: eldüendesüarez, CC BY-SA 4.0.
+원본 출처와 라이선스 링크는 `music/sources.json`을 참고하세요.
 
 ```bash
 # 하드웨어 없이 UI/AI 시험 (음악 출력은 실행 컴퓨터의 aplay)
