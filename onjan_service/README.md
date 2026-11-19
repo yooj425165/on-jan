@@ -6,6 +6,13 @@
 
 ## 실행
 
+### Pi 복사본 무결성 확인
+
+`runtime.py`가 0바이트이고 `git log`가 `bad object HEAD`라면 이름 변경으로 복구할 수 없습니다.
+Pi에만 있는 `data/`와 작업물을 먼저 백업하고, 안정적인 저장장치에 새 폴더로 복제하세요.
+새 프로젝트 루트에서 `git fsck --full`로 Git 객체를 검사하고, 의존성을 설치한 가상환경에서
+`python -m onjan_service --help`로 하드웨어를 열지 않고 `Runtime` import를 확인할 수 있습니다.
+
 ```bash
 cd ~/on-jan
 source .venv-pi/bin/activate
