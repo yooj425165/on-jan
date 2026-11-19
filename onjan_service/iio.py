@@ -1,0 +1,53 @@
+"""Integrated GPIO sensors are kernel-owned IIO devices, not DMA clients."""
+from pathlib import Path
+import threading
+
+from onjan.sensors import filtered_mean
+from onjan.service import HardwareService
+from onjan.weight import Weight
+
+
+def device(name, root=Path('/sys/bus/iio/devices')):
+    for path in root.glob('iio:device*'):
+        if (path / 'name').read_text().strip() == name:
+            return path
+    raise OSError(f'{name}: IIO 장치 없음. onjan_service/README.md의 커널 설정 확인')
+
+
+class LoadCell:
+    def __init__(self):
+        self.lock = threading.RLock()
+        self.raw = device('hx711') / 'in_voltage0_raw'
+
+    def average(self, count=5):
+        with self.lock:
+            return filtered_mean([int(self.raw.read_text()) for _ in range(count)])
+
+
+class IioHardware(HardwareService):
+    def start_gpio(self, offset=None):
+        try:
+            self.weight = Weight(LoadCell(), self.config.calibration_path.with_name('iio-calibration.json'),
+                                 self.config.change_g)
+            self.weight.offset = offset
+        except Exception as exc:
+            self.error('weight', exc)
+        else:
+            self._launch('weight', self.weight.read)
+        try:
+            path = device('srf04')
+        except Exception as exc:
+            self.error('distance', exc)
+        else:
+            def distance():
+                # Linux srf04 raw distance is millimetres (scale = 0.001 metres).
+                cm = int((path / 'in_distance_raw').read_text()) / 10
+                if not 2 <= cm <= 400:
+                    raise ValueError('초음파 측정 범위 밖')
+                return {'cm': cm, 'near': cm <= self.config.near_cm}
+            self._launch('distance', distance)
+
+    def _launch(self, name, reader):
+        thread = threading.Thread(target=self._poll, args=(name, reader, self.gpio_stop), name=name)
+        self.gpio_threads.append(thread)
+        thread.start()

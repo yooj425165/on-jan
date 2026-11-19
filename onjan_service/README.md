@@ -21,8 +21,7 @@ python -m onjan_service
 ```
 
 Pi 브라우저: `http://127.0.0.1:5008`, 다른 기기: `http://<Pi-IP>:5008`.
-Ubuntu UFW를 사용하면 `sudo ufw allow 5008/tcp`. GPIO는 실행 중인 pigpiod가 필요합니다.
-버튼으로 GPIO와 I2S를 교대할 때는 아래 **1회 설정**으로 데몬을 온잔 전용 서비스로 관리합니다.
+Ubuntu UFW를 사용하면 `sudo ufw allow 5008/tcp`.
 바흐 피아노 실연 두 곡(골드베르크 변주곡 아리아, 프랑스 모음곡 5번 가보트)은
 `git pull`하면 `music/`에 함께 받아집니다. 연주: eldüendesüarez, CC BY-SA 4.0.
 원본 출처와 라이선스 링크는 `music/sources.json`을 참고하세요.
@@ -38,26 +37,29 @@ python -m onjan_service --microphone 'plughw:CARD=YOUR_MIC,DEV=0'
 
 ## 구현 범위
 
-### Pi 최초 1회: 소스로 설치한 pigpiod를 systemd로 관리
+### Pi 4: GPIO 커널 드라이버 전환 (Ubuntu, os_prefix=current/)
 
-기존 웹과 GPIO 테스트를 종료하세요. 다른 앱이 데몬을 사용 중이면 먼저 종료해야 합니다.
-이 명령은 이전 안내대로 수동 실행했던 `/usr/local/bin/pigpiod`를 사용하는 Pi 기준입니다.
-다른 pigpiod.service가 있다면 동시에 실행하지 마세요.
+버튼은 시스템 서비스를 제어하지 않습니다. 조도/I2S만 사용할 경우에도 이전에 설치한
+pigpiod는 다음 부팅에서 시작하지 않게 설정해야 합니다. Pi의 전원/저장장치 상태가 안정된 뒤 진행하세요.
+커널 지원부터 읽기 전용으로 확인: `grep -E 'CONFIG_(HX711|SRF04)=' /boot/config-$(uname -r)`.
+두 드라이버가 y 또는 m이어야 해당 센서를 쓸 수 있습니다. m이면 `modinfo hx711`, `modinfo srf04`도 확인하세요.
+없으면 해당 커널 모듈이 필요합니다. 누락된 센서는 오류로 표시되며 I2C·마이크는 독립적입니다.
 
 ```bash
-cd ~/on-jan
-sudo pkill -x pigpiod   # 기존 수동 데몬이 없으면 생략
-sudo install -m 644 onjan_service/onjan-pigpio.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now onjan-pigpio.service
-sudo visudo -f /etc/sudoers.d/onjan-pigpio
+# 통합 웹을 종료한 후 프로젝트 루트에서. 실행 중인 데몬을 강제 종료하지 않습니다.
+sudo systemctl disable onjan-pigpio.service
+sudo apt install device-tree-compiler
+dtc -@ -I dts -O dtb -o /tmp/onjan-iio.dtbo onjan_service/onjan-iio.dts
+sudo install -m 644 /tmp/onjan-iio.dtbo /boot/firmware/current/overlays/
+sudo cp -n /boot/firmware/config.txt /boot/firmware/config.txt.before-onjan-iio
+sudo nano /boot/firmware/config.txt
 ```
 
-다음 한 줄만 등록합니다(계정이 ubuntu가 아니면 교체). 서버 자체는 sudo로 실행하지 않습니다.
-
-```text
-ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl stop onjan-pigpio.service, /usr/bin/systemctl start onjan-pigpio.service
-```
+끝의 `[all]` 아래 `dtoverlay=onjan-iio` 한 줄을 추가하세요. 마이크용 기존 오버레이는 유지합니다.
+정상 재부팅한 뒤 `pgrep -x pigpiod`가 비어 있고 `cat /sys/bus/iio/devices/iio:device*/name`에
+hx711/srf04가 있는지 확인합니다. 별도 pigpiod 자동시작과 과거 pigpio 테스트를 함께 사용하지 마세요.
+이전 온잔 전용 sudoers 규칙은 더 이상 필요하지 않습니다. HX711은 새 파일로 영점·보정을 다시 진행하세요.
+이 커널/HC-SR04P 조합은 실제 Pi에서 검증이 필요합니다. 되돌리려면 추가한 dtoverlay 줄을 제거한 후 재부팅하세요.
 
 - 웹을 먼저 실행하고 센서 초기화는 별도 스레드에서 진행합니다.
 - 영점·보정·AI 추론·녹음은 작업 큐에서 수행합니다. POST는 작업 ID와 202를 즉시 반환하고
@@ -76,10 +78,7 @@ ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl stop onjan-pigpio.service, /usr/b
 - 마이크는 선택적 ALSA 2초 녹음과 dBFS/포화율 측정을 지원합니다. S32_LE, 48kHz,
   스테레오의 왼쪽 채널을 사용하므로 실제 드라이버 지원과 정렬 확인이 필요합니다.
   마이크 추가 핀은 `HARDWARE.md`를 참고하세요. OS의 I2S 드라이버 설정은 별도로 필요합니다.
-- **다같이 측정하기**는 직전 센서값과 시각을 확보하고 GPIO 두 작업을 종료한 뒤 전용 데몬을 중지합니다.
-  조도는 계속 수집합니다. 2초 녹음 후 특징과 직전 센서 상태를 `data/measurement-rounds.jsonl`에
-  저장하고, 실패 시에도 데몬 재시작과 센서 재연결을 시도합니다. 같은 순간의 측정은 아닙니다.
-  센서 오류는 0으로 대체하지 않습니다. 전환 중에는 컵 자동화에 이전 값을 재사용하지 않습니다.
+- 녹음 중에도 커널 센서 수집은 계속됩니다. 녹음 직전 상태와 특징은 `data/measurement-rounds.jsonl`에 저장됩니다.
 - Ctrl+C/SIGTERM으로 작업과 센서 종료를 기다린 뒤 자원을 정리합니다. 기존 HX711 평균화 등
   진행 중인 I/O는 즉시 취소되지 않으므로 종료에 수 초 걸릴 수 있습니다.
 
@@ -89,7 +88,7 @@ ubuntu ALL=(root) NOPASSWD: /usr/bin/systemctl stop onjan-pigpio.service, /usr/b
 2. WAV 재생/정지와 실제 USB 출력 확인.
 3. 기본 모드: 센서 상태, Tare/실제 무게추 보정 및 응답 중 상태 API 갱신 확인.
 4. 모터 감지 시작: 빈 플랫폼 → 200g 이상 → 유지 → 제거하며 상태 전이 확인.
-5. 마이크 격리 모드: 소리 크기 변화, 왼쪽 채널, 포화율 확인.
+5. 마이크 측정: 소리 크기 변화, 왼쪽 채널, 포화율 확인.
 
 실제 사용자 검증, 실물 모터 동작, I2S/pigpio 동시 사용, 학습된 음악 적합도 모델은
 완료되지 않았습니다. 웹에 가상 AI·모터 시뮬레이션 표시를 유지합니다.

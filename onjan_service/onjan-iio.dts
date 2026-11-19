@@ -1,0 +1,28 @@
+/dts-v1/;
+/plugin/;
+/ {
+    compatible = "brcm,bcm2711";
+    fragment@0 {
+        target-path = "/";
+        __overlay__ {
+            onjan_avdd: onjan-avdd {
+                compatible = "regulator-fixed";
+                regulator-name = "onjan-hx711-avdd";
+                regulator-min-microvolt = <3300000>;
+                regulator-max-microvolt = <3300000>;
+                regulator-always-on;
+            };
+            onjan-load-cell {
+                compatible = "avia,hx711";
+                sck-gpios = <&gpio 6 0>;
+                dout-gpios = <&gpio 5 0>;
+                avdd-supply = <&onjan_avdd>;
+            };
+            onjan-range {
+                compatible = "devantech,srf04";
+                trig-gpios = <&gpio 23 0>;
+                echo-gpios = <&gpio 24 0>;
+            };
+        };
+    };
+};

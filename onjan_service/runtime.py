@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from onjan.config import Config, ROOT
 import math
-from onjan.service import HardwareService
+from .iio import IioHardware
 from .automation import Automation
 from .microphone import capture
 
@@ -19,7 +19,7 @@ LOG = logging.getLogger(__name__)
 
 class Runtime:
     def __init__(self, audio_device, hardware=True, microphone=None):
-        self.hw = HardwareService(Config(audio_device=audio_device))
+        self.hw = IioHardware(Config(audio_device=audio_device))
         self.hardware = hardware
         self.microphone = (microphone or "plughw:CARD=sndrpigooglevoi,DEV=0") if hardware else None
         self.lock = threading.RLock()
@@ -188,44 +188,18 @@ class Runtime:
             return result
 
     def _capture_round(self):
-        unit = "onjan-pigpio.service"
-        if subprocess.run(["/usr/bin/systemctl", "is-active", "--quiet", unit]).returncode:
-            raise ValueError("온잔 전용 pigpiod 서비스가 필요합니다. onjan_service/README.md 설정을 확인하세요.")
-        ctl = ["sudo", "-n", "/usr/bin/systemctl"]
+        # Refuse mixed ownership after migration; never change system services here.
+        if subprocess.run(['pgrep', '-x', 'pigpiod'], timeout=3).returncode != 1:
+            raise ValueError('기존 pigpiod 실행 중: IIO 전환 안내를 확인하세요.')
         before = self.hw.snapshot()['sensors']
-        offset = self.hw.weight.offset if self.hw.weight else None
-        stopped = False
-        try:
-            self.hw.stop_gpio()
-            for name in ('weight', 'distance'):
-                self.hw.error(name, '마이크 측정으로 일시 정지')
-            subprocess.run([*ctl, "stop", unit], check=True, timeout=20)
-            stopped = True
-            if subprocess.run(['pgrep', '-x', 'pigpiod']).returncode != 1:
-                raise ValueError('다른 pigpiod가 실행 중입니다. 녹음을 건너뜁니다.')
-            def level(dbfs):
-                with self.lock:
-                    self.mic = {'status': 'recording', 'level_dbfs': dbfs, 'data': None}
-
-            sound = capture(self.microphone, on_level=level)
+        def level(dbfs):
             with self.lock:
-                self.mic = {'status': 'restoring', 'data': None}
-            entry = {'measured_at': time.time(), 'before_capture': before, 'microphone': sound}
-            with (ROOT / 'data' / 'measurement-rounds.jsonl').open('a', encoding='utf8') as out:
-                out.write(json.dumps(entry, ensure_ascii=False) + '\n')
-            return sound
-        finally:
-            # Even a failed stop request may have reached systemd (e.g. timeout).
-            if stopped or subprocess.run(["/usr/bin/systemctl", "is-active", "--quiet", unit]).returncode:
-                subprocess.run([*ctl, "start", unit], check=True, timeout=20)
-                for _ in range(30):
-                    import socket
-                    try:
-                        with socket.create_connection(('127.0.0.1', 8888), timeout=.2):
-                            break
-                    except OSError:
-                        time.sleep(.1)
-            self.hw.start_gpio(offset)
+                self.mic = {'status': 'recording', 'level_dbfs': dbfs, 'data': None}
+        sound = capture(self.microphone, on_level=level)
+        entry = {'measured_at': time.time(), 'before_capture': before, 'microphone': sound}
+        with (ROOT / 'data' / 'measurement-rounds.jsonl').open('a', encoding='utf8') as out:
+            out.write(json.dumps(entry, ensure_ascii=False) + '\n')
+        return sound
 
     def close(self):
         self.stop.set()

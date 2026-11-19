@@ -7,19 +7,18 @@ from onjan_service.web import create_app
 
 
 class IntegrationTests(unittest.TestCase):
-    def test_capture_failure_resumes_gpio_with_tare(self):
+    def test_capture_failure_never_restarts_sensors(self):
         runtime = Runtime('default')
         runtime.hw = Mock()
-        runtime.hw.weight.offset = 1234
         runtime.hw.snapshot.return_value = {'sensors': {}}
-        with patch('onjan_service.runtime.subprocess.run', side_effect=[
-                Mock(returncode=0), Mock(), Mock(returncode=1), Mock()]), \
-                patch('socket.create_connection', side_effect=lambda *a, **kw: __import__('contextlib').nullcontext()), \
+        with patch('onjan_service.runtime.subprocess.run', return_value=Mock(returncode=1)) as run, \
                 patch('onjan_service.runtime.capture', side_effect=ValueError('silent')):
             with self.assertRaisesRegex(ValueError, 'silent'):
                 runtime._capture_round()
-        runtime.hw.stop_gpio.assert_called_once()
-        runtime.hw.start_gpio.assert_called_once_with(1234)
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0], ['pgrep', '-x', 'pigpiod'])
+        runtime.hw.stop_gpio.assert_not_called()
+        runtime.hw.start_gpio.assert_not_called()
 
     def test_one_cycle_requires_removal_and_recovers_from_error(self):
         machine = Automation()
