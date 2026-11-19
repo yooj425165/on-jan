@@ -203,7 +203,13 @@ class Runtime:
             stopped = True
             if subprocess.run(['pgrep', '-x', 'pigpiod']).returncode != 1:
                 raise ValueError('다른 pigpiod가 실행 중입니다. 녹음을 건너뜁니다.')
-            sound = capture(self.microphone)
+            def level(dbfs):
+                with self.lock:
+                    self.mic = {'status': 'recording', 'level_dbfs': dbfs, 'data': None}
+
+            sound = capture(self.microphone, on_level=level)
+            with self.lock:
+                self.mic = {'status': 'restoring', 'data': None}
             entry = {'measured_at': time.time(), 'before_capture': before, 'microphone': sound}
             with (ROOT / 'data' / 'measurement-rounds.jsonl').open('a', encoding='utf8') as out:
                 out.write(json.dumps(entry, ensure_ascii=False) + '\n')

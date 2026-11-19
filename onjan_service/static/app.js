@@ -42,8 +42,10 @@ async function poll() {
     const addresses = state.i2c_addresses || [];
     $('i2c-info').textContent = state.phase === 'manual_only' ? '수동 모드: I2C 탐색 안 함' : state.phase === 'starting' ? 'I2C 초기화 중' : `시작 시 I2C: ${addresses.join(', ') || '확인된 주소 없음'} · BH1750 예상: 0x23 / 0x5c`;
     const mic = state.microphone;
+    const live = mic.status === 'recording' && Number.isFinite(mic.level_dbfs);
+    $('mic-level').value = live ? Math.max(-80, mic.level_dbfs) : -80;
     micEnabled = mic.status !== 'disabled';
-    $('microphone').textContent = !micEnabled ? '비활성 · arecord -l로 녹음 장치를 확인하고 --microphone 옵션으로 통합 서버를 시작하세요.' : mic.status === 'error' ? `측정 실패: ${mic.error}` : mic.data ? `최근 측정: ${mic.data.rms_dbfs} dBFS (RMS) · 피크 ${mic.data.peak_dbfs} dBFS · ${mic.data.device}` : '측정 대기 · 버튼을 눌러 녹음 장치 응답을 확인하세요.';
+    $('microphone').textContent = live ? `녹음 중 · ${mic.level_dbfs} dBFS` : mic.status === 'restoring' ? '측정 완료 · 센서 복구 중' : !micEnabled ? '비활성 · arecord -l로 녹음 장치를 확인하고 --microphone 옵션으로 통합 서버를 시작하세요.' : mic.status === 'error' ? `측정 실패: ${mic.error}` : mic.data ? `최근 측정: ${mic.data.rms_dbfs} dBFS (RMS) · 피크 ${mic.data.peak_dbfs} dBFS · ${mic.data.device}` : '측정 대기 · 버튼을 눌러 녹음 장치 응답을 확인하세요.';
     const labels={disabled:'감지 꺼짐',wait_removal:'컵 제거 대기',waiting:'컵 올리기 대기',moving:'이동 중 (시뮬레이션)',holding:'위치 유지 (시뮬레이션)',returning:'복귀 중 (시뮬레이션)',sensor_unavailable:'무게 센서 오류 / 최신값 없음'};
     $('automation').textContent = `${labels[state.automation.state]} · 완료 ${state.automation.cycles}회`;
     if (state.job) $('message').textContent = `${state.job.action} · ${state.job.status}${state.job.error ? ': '+state.job.error : ''}`;
@@ -52,8 +54,8 @@ async function poll() {
     $('selection').textContent = sel ? `${sel.mood} · ${sel.reason} · ${sel.tracks.length}곡 ${sel.error || ''}` : '분위기를 측정하거나 직접 선택하세요.';
     $('diagnostics').textContent=JSON.stringify(state,null,2);
   } catch(error) {
-    connected=false;$('connection').textContent='연결 끊김';
+    connected=false;$('mic-level').value=-80;$('microphone').textContent='서버 연결 없음';$('connection').textContent='연결 끊김';
     for (const name of ['light','weight','distance']) {$(name).textContent='—';$(`${name}-error`).textContent='서버 연결 없음';}
-  } finally {buttons();setTimeout(poll,1000);}
+  } finally {buttons();setTimeout(poll,connected && running ? 120 : 1000);}
 }
 buttons();poll();
