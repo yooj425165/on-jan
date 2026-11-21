@@ -1,0 +1,19 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>온잔 · 서보 시험</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main><header><b>ONJAN / 모터 테스트</b><span>PCA9685 · 0x40</span></header>
+<article><p class="eyebrow">SERVO BENCH / MG996R</p><h1>서보 단독 시험</h1><p>{{ '실물 출력 허용 · 무부하 시험' if powered else '출력 잠금 · 통신만 확인' }}</p>
+<button id="probe">PCA9685 통신 확인</button><hr>
+<fieldset {% if not powered %}disabled{% endif %}><legend>채널 한 개만 0.6초 구동 후 출력 끄기</legend>
+<label>모터<select id="channel"><option value="0">1번 · CH0</option><option value="1">2번 · CH1</option></select></label>
+<label>목표 각도<select id="angle"><option>90</option><option>80</option><option>100</option></select></label><button id="pulse">선택한 모터 시험</button></fieldset>
+<p>각도는 명령값이며 실측값이 아닙니다. 최초 이동 전 기구를 분리하세요. PWM이 꺼지면 위치 유지 토크는 보장되지 않습니다.</p>
+<p id="message" role="status">버튼을 눌러 확인하세요.</p></article></main>
+<script>
+const token={{ token|tojson }}, el=id=>document.getElementById(id);
+async function send(action){
+  el('probe').disabled=el('pulse').disabled=true;
+  try{const r=await fetch('/test',{method:'POST',headers:{'Content-Type':'application/json','X-Onjan-Token':token},body:JSON.stringify({action,channel:Number(el('channel').value),angle:Number(el('angle').value)})});const d=await r.json();el('message').textContent=d.message||d.error;}
+  catch(e){el('message').textContent='서버 연결 오류 · 출력 확인 필요';}
+  finally{el('probe').disabled=el('pulse').disabled=false;}
+}
+el('probe').onclick=()=>send('probe');el('pulse').onclick=()=>send('pulse');
+</script></body></html>

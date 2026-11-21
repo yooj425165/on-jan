@@ -43,10 +43,8 @@ class Servos:
                 time.sleep(0.005)
                 for channel in range(16):
                     self._write(0x09 + 4 * channel, 0x10)
-                self._write(0xFA, 0)
-                self._write(0xFB, 0)
-                self._write(0xFC, 0)
-                self._write(0xFD, 0)
+                # ALL_LED writes broadcast to every channel. Clear full-off
+                # only for the selected channel in _angle().
                 self.ready = True
 
     def _angle(self, channel, angle):
