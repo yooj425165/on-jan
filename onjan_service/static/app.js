@@ -20,11 +20,20 @@ $('play').onclick = () => command('play',{file:$('tracks').value});
 $('calibrate').onsubmit = e => {e.preventDefault();command('calibrate',{grams:Number($('known').value)});};
 $('arm').onclick = () => command('automation',{enabled:true});
 $('disarm').onclick = () => command('automation',{enabled:false});
+$('servo-pulse').onclick = () => command('servo_pulse',{channel:Number($('servo-channel').value),angle:Number($('servo-angle').value)});
 async function poll() {
   try {
     const response = await fetch('/api/status',{signal:AbortSignal.timeout(5000)});
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const state = await response.json();
+    const pca = state.sensors.pca;
+    const armed = state.servo_control === 'manual_test';
+    $('servo-controls').disabled = !(armed && pca?.ok && !pca.stale);
+    $('servo-info').textContent = `${armed ? '수동 구동 허용' : '외부 전원 미확인 · 구동 잠금'} / ${pca?.ok && !pca.stale ? 'PCA 통신 정상' : pca?.error || 'PCA 응답 대기'}`;
+    if (state.job?.action.startsWith('servo_')) {
+      const j=state.job;
+      $('servo-result').textContent = j.error || (j.status !== 'done' ? '처리 중' : j.action === 'servo_probe' ? '0x40 통신 성공 (V+ 감지 아님)' : `CH${j.result.channel} · ${j.result.angle}° 명령 완료 · PWM OFF`);
+    }
     connected = true;
     running = state.phase === 'starting' || state.job?.status === 'running';
     $('connection').textContent = `${state.phase} · ${new Date().toLocaleTimeString()}`;

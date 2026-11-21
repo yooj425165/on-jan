@@ -18,8 +18,10 @@ LOG = logging.getLogger(__name__)
 
 
 class Runtime:
-    def __init__(self, audio_device, hardware=True, microphone=None):
-        self.hw = IioHardware(Config(audio_device=audio_device))
+    def __init__(self, audio_device, hardware=True, microphone=None, motor_test=False):
+        self.motor_test = hardware and motor_test
+        self.hw = IioHardware(Config(audio_device=audio_device, servo_enabled=self.motor_test,
+                                     servo_power_confirmed=self.motor_test))
         self.hardware = hardware
         self.microphone = (microphone or "plughw:CARD=sndrpigooglevoi,DEV=0") if hardware else None
         self.lock = threading.RLock()
@@ -84,12 +86,13 @@ class Runtime:
         result = self.hw.snapshot()
         with self.lock:
             result.update(phase=self.phase, job=copy.deepcopy(self.job),
+                          servo_control='manual_test' if self.motor_test else 'locked',
                           selection=copy.deepcopy(self.selection), moods=list(self.catalog["lists"]),
                           automation=self.automation.snapshot(), microphone=copy.deepcopy(self.mic))
         return result
 
     def submit(self, action, data):
-        allowed = {"measure", "choose", "play", "stop", "tare", "calibrate", "automation", "capture"}
+        allowed = {"measure", "choose", "play", "stop", "tare", "calibrate", "automation", "capture", "servo_probe", "servo_pulse"}
         if action not in allowed:
             raise ValueError("지원하지 않는 명령")
         with self.lock:
@@ -113,6 +116,23 @@ class Runtime:
                 self.job.update(status="error", error=str(exc))
 
     def _perform(self, action, data):
+        if action in ('servo_probe', 'servo_pulse'):
+            servo = self.hw.servos
+            if servo is None:
+                raise ValueError('PCA9685 사용 불가: 로직 전원 및 I2C 배선을 확인하세요.')
+            if action == 'servo_probe':
+                return servo.probe()
+            ch, angle = data.get('channel'), data.get('angle')
+            if not self.motor_test:
+                raise ValueError('외부 전원 미확인: 서보 출력 잠금')
+            if type(ch) is not int or ch not in (0, 1) or type(angle) is not int or angle not in (80, 90, 100):
+                raise ValueError('채널 0/1, 각도 80/90/100만 허용됩니다.')
+            try:
+                servo.move(ch, angle, duration=0)
+                self.stop.wait(.6)
+            finally:
+                servo.disable()
+            return {'channel': ch, 'angle': angle, 'pwm': 'off'}
         if action in ('measure', 'choose'):
             if action == 'measure':
                 with self.lock:

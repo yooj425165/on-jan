@@ -14,9 +14,10 @@ def main():
     parser.add_argument("--audio-device", default=Config.audio_device)
     parser.add_argument("--no-hardware", action="store_true", help="수동 AI 입력과 WAV 재생만 사용")
     parser.add_argument("--microphone", help="ALSA capture device override")
+    parser.add_argument("--confirm-external-power", action="store_true", help="외부 서보 전원 확인 후 수동 시험 허용")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    runtime = Runtime(args.audio_device, not args.no_hardware, args.microphone)
+    runtime = Runtime(args.audio_device, not args.no_hardware, args.microphone, args.confirm_external_power)
 
     def terminate(signum, frame):
         raise KeyboardInterrupt
