@@ -60,10 +60,14 @@ def create_app(bus, config):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--confirm-external-power', action='store_true')
+    parser.add_argument('--travel', type=int, choices=(180, 360), default=180,
+                        help='위치 제어 서보의 실제 작동 범위(도)')
     parser.add_argument('--port', type=int, default=5008)
     args = parser.parse_args()
     config = Config(servo_enabled=args.confirm_external_power,
-                    servo_power_confirmed=args.confirm_external_power)
+                    servo_power_confirmed=args.confirm_external_power,
+                    servo_max_angle=args.travel, servo_travel_deg=args.travel,
+                    servo_initial_angle=args.travel / 2)
     bus = I2C(config.i2c_bus)
     try:
         if args.confirm_external_power:

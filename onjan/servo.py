@@ -49,7 +49,7 @@ class Servos:
 
     def _angle(self, channel, angle):
         c = self.c
-        pulse = c.servo_min_us + (angle / 180) * (c.servo_max_us - c.servo_min_us)
+        pulse = c.servo_min_us + (angle / c.servo_travel_deg) * (c.servo_max_us - c.servo_min_us)
         ticks = round(pulse * 4096 / 20000)
         with self.i2c.lock:
             self.i2c.bus.write_i2c_block_data(0x40, 0x06 + channel * 4,

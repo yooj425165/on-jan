@@ -25,4 +25,5 @@ class Config:
     servo_max_us: int = 2000
     servo_min_angle: float = 0.0
     servo_max_angle: float = 180.0
+    servo_travel_deg: int = 180
     servo_initial_angle: float = 90.0
