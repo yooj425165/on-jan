@@ -4,12 +4,13 @@
 <button id="probe">PCA9685 통신 확인</button><hr>
 <fieldset {% if not powered %}disabled{% endif %}><legend>채널 한 개만 0.6초 구동 후 출력 끄기</legend>
 <label>모터<select id="channel"><option value="0">1번 · CH0</option><option value="1">2번 · CH1</option></select></label>
-<label>목표 각도<select id="angle"><option>90</option><option>80</option><option>100</option></select></label><button id="pulse">선택한 모터 시험</button></fieldset>
+<label>목표 위치 ({{ config.servo_min_angle|int }}~{{ config.servo_max_angle|int }}°)<input type="number" id="angle" min="{{ config.servo_min_angle }}" max="{{ config.servo_max_angle }}" step="any" value="{{ config.servo_initial_angle }}" required></label><button id="pulse">입력한 각도로 이동</button></fieldset>
 <p>각도는 명령값이며 실측값이 아닙니다. 최초 이동 전 기구를 분리하세요. PWM이 꺼지면 위치 유지 토크는 보장되지 않습니다.</p>
 <p id="message" role="status">버튼을 눌러 확인하세요.</p></article></main>
 <script>
 const token={{ token|tojson }}, el=id=>document.getElementById(id);
 async function send(action){
+  if(action==='pulse' && !el('angle').reportValidity()) return;
   el('probe').disabled=el('pulse').disabled=true;
   try{const r=await fetch('/test',{method:'POST',headers:{'Content-Type':'application/json','X-Onjan-Token':token},body:JSON.stringify({action,channel:Number(el('channel').value),angle:Number(el('angle').value)})});const d=await r.json();el('message').textContent=d.message||d.error;}
   catch(e){el('message').textContent='서버 연결 오류 · 출력 확인 필요';}

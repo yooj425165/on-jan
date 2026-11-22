@@ -20,7 +20,7 @@ def create_app(bus, config):
 
     @app.get('/')
     def index():
-        return render_template('motor.html', token=token, powered=powered)
+        return render_template('motor.html', token=token, powered=powered, config=config)
 
     @app.post('/test')
     def test():
@@ -40,8 +40,9 @@ def create_app(bus, config):
                 return jsonify(error='외부 전원 미확인: 출력 잠금'), 403
             ch, angle = data.get('channel'), data.get('angle')
             if (data.get('action') != 'pulse' or type(ch) is not int or ch not in (0, 1)
-                    or type(angle) is not int or not 80 <= angle <= 100):
-                return jsonify(error='채널 0/1, 시험 각도 80~100°만 허용됩니다.'), 400
+                    or type(angle) not in (int, float)
+                    or not config.servo_min_angle <= angle <= config.servo_max_angle):
+                return jsonify(error=f'채널 0/1, 목표 각도 {config.servo_min_angle:g}~{config.servo_max_angle:g}°를 입력하세요.'), 400
             try:
                 servos.move(ch, angle, duration=0)
                 time.sleep(.6)
