@@ -17,7 +17,6 @@ async function command(action, data={}) {
 document.querySelectorAll('[data-action]').forEach(b => b.onclick = () => command(b.dataset.action));
 $('choose').onclick = () => command('choose',{mood:$('mood').value});
 $('play').onclick = () => command('play',{file:$('tracks').value});
-$('calibrate').onsubmit = e => {e.preventDefault();command('calibrate',{grams:Number($('known').value)});};
 $('arm').onclick = () => command('automation',{enabled:true});
 $('disarm').onclick = () => command('automation',{enabled:false});
 $('servo-pulse').onclick = () => {

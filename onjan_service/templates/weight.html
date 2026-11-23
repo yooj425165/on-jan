@@ -1,0 +1,9 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>온잔 · 무게 작업대</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main><header><b>ONJAN / 무게 작업대</b><a href="/">← 통합 화면</a></header>
+<article><p class="eyebrow">HX711 / LIVE SIGNAL</p><h1>컵을 올리고,<br>변화를 확인해요.</h1><p id="health" role="status">첫 측정 대기 중</p>
+<section class="metrics"><article>센서 원시값 (RAW)<h2 id="raw">—</h2></article><article>환산 무게 (g)<h2 id="mass">—</h2></article><article>보정 계수 (counts/g)<h2 id="factor">—</h2></article></section>
+<h2>최근 RAW 변화</h2><svg viewBox="0 0 600 100" preserveAspectRatio="none" style="width:100%;height:110px" role="img" aria-label="최근 최대 60개 RAW 측정값"><polyline id="line" points="" fill="none" stroke="var(--accent)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg><p id="range"></p><p>작은 흔들림도 크게 보일 수 있는 자동 축척입니다. 빈 상태의 변동폭보다 컵을 올렸을 때 차이가 뚜렷한지 보세요. 감소하는 방향이어도 괜찮습니다.</p></article>
+<section class="columns"><article><h2>① 빈 플랫폼 영점 조정</h2><p>컵과 무게추를 치우고 값이 안정되면 누르세요. 재시작하면 영점을 다시 잡아야 합니다.</p><button id="tare" disabled>현재 상태를 0g으로</button></article>
+<article><h2>② 실제 무게추로 보정</h2><p>영점 조정 후 무게를 아는 물체를 올려두세요. 값이 안정되면 그 물체의 실제 무게를 입력하세요.</p><form id="cal"><label>기준 무게 (g)<input id="known" type="number" required min="0.001" step="any" placeholder="예: 100"></label><button id="save" disabled>보정 계수 저장</button></form></article></section>
+<article><h2>③ 내려놓고 다시 확인</h2><p>치우면 약 0g, 다시 올리면 기준 무게 근처여야 합니다. 가능하면 다른 무게로도 확인하세요. RAW가 하중에 반응하지 않으면 보정 대신 장착·배선을 확인하세요.</p></article><p id="message" role="status">영점·보정 중에는 컵 자동화가 해제됩니다.</p></main>
+<script>const token={{ token|tojson }};</script><script src="/static/weight.js"></script></body></html>

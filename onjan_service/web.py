@@ -24,6 +24,10 @@ def create_app(runtime):
     def status():
         return jsonify(runtime.snapshot())
 
+    @app.get('/weight')
+    def weight():
+        return render_template('weight.html', token=token)
+
     @app.post("/api/commands/<action>")
     def command(action):
         if request.headers.get("X-Onjan-Token") != token:
