@@ -28,6 +28,10 @@ def create_app(runtime):
     def weight():
         return render_template('weight.html', token=token)
 
+    @app.get('/microphone')
+    def microphone():
+        return render_template('microphone.html', token=token)
+
     @app.post("/api/commands/<action>")
     def command(action):
         if request.headers.get("X-Onjan-Token") != token:

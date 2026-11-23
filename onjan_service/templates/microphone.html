@@ -1,0 +1,6 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>온잔 · 마이크 상세</title><link rel="stylesheet" href="/static/style.css"></head>
+<body><main><header><b>ONJAN / 소리 작업대</b><a href="/">← 통합 화면</a></header>
+<article class="sound"><p class="eyebrow">INMP441 / I2S</p><h1>주변 소리 측정</h1><p>음악을 정지하고 버튼을 누르세요. 처음에는 조용히 있다가 말을 하면 입력 음량 바가 어떻게 달라지는지 볼 수 있어요.</p>
+<button id="capture" disabled>마이크만 2초 측정</button><p id="message" role="status">연결 중</p><label for="live">녹음 중 입력 음량 · −80 ~ 0 dBFS</label><meter id="live" min="-80" max="0" value="-80"></meter><span id="level"></span></article>
+<article><p class="eyebrow">LAST CAPTURE</p><h2>최근 측정 결과</h2><section class="metrics"><article>평균 크기 (RMS)<h2 id="rms">—</h2></article><article>순간 최대 (피크)<h2 id="peak">—</h2></article><article>포화 근접 샘플 비율<h2 id="clip">—</h2></article></section><p id="device"></p><p>0 dBFS에 가까울수록 큰 입력입니다. 실제 공간의 소음계 수치(dB SPL)는 아닙니다. 음성 파일은 보관하지 않습니다.</p></article>
+</main><script>const token={{ token|tojson }};</script><script src="/static/microphone.js"></script></body></html>
