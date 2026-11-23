@@ -18,7 +18,7 @@ def create_app(runtime):
 
     @app.get("/")
     def index():
-        return render_template("index.html", token=token)
+        return render_template("index.html", token=token, travel=runtime.travel)
 
     @app.get("/api/status")
     def status():

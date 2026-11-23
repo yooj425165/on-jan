@@ -1,5 +1,12 @@
 # 온잔(ONJAN)
 
+### ONJAN TOTAL 실행
+
+`python -m onjan_total`로 센서·플레이리스트와 CH0/CH1 목표 각도 입력을 한 화면에서 사용합니다.
+외부 전원·공통 접지 확인 후 수동 구동은 `python -m onjan_total --confirm-external-power`.
+360° 위치제어형을 사용할 때만 `--travel 360`을 추가하세요. `--no-hardware`는 화면 확인용입니다.
+기존 서버를 먼저 종료하세요. 기본 포트는 5008이며 컵 자동화는 시뮬레이션입니다.
+
 현재 통합 웹은 조도·주변 소리를 기준으로 4개 분위기 목록(30곡)을 재생합니다. 실행: `python -m onjan_service`. AI 모델 관련 설명은 이전 실험용입니다.
 
 ## 통합 서비스

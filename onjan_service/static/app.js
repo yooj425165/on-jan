@@ -20,7 +20,9 @@ $('play').onclick = () => command('play',{file:$('tracks').value});
 $('calibrate').onsubmit = e => {e.preventDefault();command('calibrate',{grams:Number($('known').value)});};
 $('arm').onclick = () => command('automation',{enabled:true});
 $('disarm').onclick = () => command('automation',{enabled:false});
-$('servo-pulse').onclick = () => command('servo_pulse',{channel:Number($('servo-channel').value),angle:Number($('servo-angle').value)});
+$('servo-pulse').onclick = () => {
+  if ($('servo-angle').reportValidity()) command('servo_pulse',{channel:Number($('servo-channel').value),angle:Number($('servo-angle').value)});
+};
 async function poll() {
   try {
     const response = await fetch('/api/status',{signal:AbortSignal.timeout(5000)});

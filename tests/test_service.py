@@ -76,6 +76,7 @@ class IntegrationTests(unittest.TestCase):
 
     def test_api_returns_job_without_waiting(self):
         runtime = Mock()
+        runtime.travel = None
         runtime.submit.return_value = "job-1"
         runtime.snapshot.return_value = {"phase": "ready"}
         client = create_app(runtime).test_client()

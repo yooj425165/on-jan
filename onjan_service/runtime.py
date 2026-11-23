@@ -18,10 +18,14 @@ LOG = logging.getLogger(__name__)
 
 
 class Runtime:
-    def __init__(self, audio_device, hardware=True, microphone=None, motor_test=False):
+    def __init__(self, audio_device, hardware=True, microphone=None, motor_test=False, travel=None):
+        if travel not in (None, 180, 360):
+            raise ValueError('travel: 180 또는 360')
+        self.travel = travel
         self.motor_test = hardware and motor_test
         self.hw = IioHardware(Config(audio_device=audio_device, servo_enabled=self.motor_test,
-                                     servo_power_confirmed=self.motor_test))
+                                     servo_power_confirmed=self.motor_test, servo_travel_deg=travel or 180,
+                                     servo_max_angle=travel or 180))
         self.hardware = hardware
         self.microphone = (microphone or "plughw:CARD=sndrpigooglevoi,DEV=0") if hardware else None
         self.lock = threading.RLock()
@@ -125,8 +129,13 @@ class Runtime:
             ch, angle = data.get('channel'), data.get('angle')
             if not self.motor_test:
                 raise ValueError('외부 전원 미확인: 서보 출력 잠금')
-            if type(ch) is not int or ch not in (0, 1) or type(angle) is not int or angle not in (80, 90, 100):
-                raise ValueError('채널 0/1, 각도 80/90/100만 허용됩니다.')
+            if type(ch) is not int or ch not in (0, 1):
+                raise ValueError('채널 0/1만 허용됩니다.')
+            if self.travel is None:
+                if type(angle) is not int or angle not in (80, 90, 100):
+                    raise ValueError('시험 각도: 80/90/100')
+            elif type(angle) not in (float, int) or not 0 <= angle <= self.travel:
+                raise ValueError(f'목표 각도는 0~{self.travel}°로 입력하세요.')
             try:
                 servo.move(ch, angle, duration=0)
                 self.stop.wait(.6)
