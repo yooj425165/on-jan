@@ -96,7 +96,7 @@ class Runtime:
         return result
 
     def submit(self, action, data):
-        allowed = {"measure", "choose", "play", "stop", "tare", "calibrate", "automation", "capture", "servo_probe", "servo_pulse"}
+        allowed = {"measure", "choose", "play", "stop", "tare", "calibrate", "automation", "capture", "servo_probe", "servo_pulse", "servo_cycle"}
         if action not in allowed:
             raise ValueError("지원하지 않는 명령")
         with self.lock:
@@ -120,7 +120,7 @@ class Runtime:
                 self.job.update(status="error", error=str(exc))
 
     def _perform(self, action, data):
-        if action in ('servo_probe', 'servo_pulse'):
+        if action in ('servo_probe', 'servo_pulse', 'servo_cycle'):
             servo = self.hw.servos
             if servo is None:
                 raise ValueError('PCA9685 사용 불가: 로직 전원 및 I2C 배선을 확인하세요.')
@@ -129,6 +129,9 @@ class Runtime:
             ch, angle = data.get('channel'), data.get('angle')
             if not self.motor_test:
                 raise ValueError('외부 전원 미확인: 서보 출력 잠금')
+            if action == 'servo_cycle':
+                servo.tilt_cycle(self.stop)
+                return {'pwm': 'off', 'angles': [180, 180]}
             if type(ch) is not int or ch not in (0, 1):
                 raise ValueError('채널 0/1만 허용됩니다.')
             if self.travel is None:

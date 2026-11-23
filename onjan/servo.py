@@ -47,14 +47,55 @@ class Servos:
                 # only for the selected channel in _angle().
                 self.ready = True
 
-    def _angle(self, channel, angle):
+    def _pulse_bytes(self, angle):
         c = self.c
         pulse = c.servo_min_us + (angle / c.servo_travel_deg) * (c.servo_max_us - c.servo_min_us)
         ticks = round(pulse * 4096 / 20000)
+        return [0, 0, ticks & 255, ticks >> 8]
+
+    def _angle(self, channel, angle):
         with self.i2c.lock:
             self.i2c.bus.write_i2c_block_data(0x40, 0x06 + channel * 4,
-                                           [0, 0, ticks & 255, ticks >> 8])
+                                           self._pulse_bytes(angle))
         self.angles[channel] = angle
+
+    def tilt_cycle(self, stop):
+        home, tilted = (180, 180), (100, 50)
+        if not all(self.c.servo_min_angle <= a <= self.c.servo_max_angle for a in (*home, *tilted)):
+            raise ValueError('동작 각도가 설정 범위를 벗어납니다.')
+
+        def pair(angles):
+            if stop.is_set():
+                raise RuntimeError('동작 중단')
+            # Adjacent channel registers, one auto-increment I2C transaction.
+            with self.i2c.lock:
+                self.i2c.bus.write_i2c_block_data(0x40, 0x06,
+                    self._pulse_bytes(angles[0]) + self._pulse_bytes(angles[1]))
+            self.angles.update(enumerate(angles))
+
+        def wait(seconds):
+            if stop.wait(max(0, seconds)):
+                raise RuntimeError('동작 중단')
+
+        def ramp(start, end):
+            t0 = time.monotonic()
+            for step in range(1, 201):
+                wait(t0 + step * .02 - time.monotonic())
+                u = step / 200
+                progress = u*u*(3 - 2*u)
+                pair(tuple(a + (b-a)*progress for a, b in zip(start, end)))
+
+        with self.lock:
+            try:
+                self._enable()
+                pair(home)
+                wait(.6)
+                ramp(home, tilted)
+                wait(3)
+                ramp(tilted, home)
+                wait(.6)
+            finally:
+                self.disable()
 
     def move(self, channel, angle, duration=1.0):
         c = self.c
