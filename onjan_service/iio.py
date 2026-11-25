@@ -28,7 +28,7 @@ class IioHardware(HardwareService):
     def start_gpio(self, offset=None):
         try:
             self.weight = Weight(LoadCell(), self.config.calibration_path.with_name('iio-calibration.json'),
-                                 self.config.change_g)
+                                 self.config.change_g, startup_zero=True)
             self.weight.offset = offset
         except Exception as exc:
             self.error('weight', exc)

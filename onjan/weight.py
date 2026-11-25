@@ -1,14 +1,19 @@
 """Persist only the measured counts/gram factor; tare each startup."""
 import json
 import math
+import time
+from collections import deque
+from statistics import median
 
 
 class Weight:
-    def __init__(self, sensor, path, threshold):
+    def __init__(self, sensor, path, threshold, startup_zero=False):
         self.sensor, self.path, self.threshold = sensor, path, threshold
         self.factor = None
         self.offset = None
         self.previous = None
+        self.startup_zero = startup_zero
+        self.window = deque()
         if path.exists():
             self.set_factor(json.loads(path.read_text())["counts_per_g"], save=False)
 
@@ -41,10 +46,30 @@ class Weight:
 
     def read(self):
         with self.sensor.lock:
-            raw = self.sensor.average()
+            try:
+                raw = self.sensor.average()
+            except Exception:
+                self.window.clear()
+                raise
+            if self.startup_zero and self.offset is None and self.factor is not None:
+                self._observe_zero(raw, time.monotonic())
             grams = None if self.factor is None or self.offset is None else (raw - self.offset) / self.factor
             delta = None if grams is None or self.previous is None else grams - self.previous
             self.previous = grams
             return {"raw": raw, "g": grams, "delta_g": delta,
                     "changed": delta is not None and abs(delta) >= self.threshold,
                     "counts_per_g": self.factor, "tared": self.offset is not None}
+
+    def _observe_zero(self, raw, now):
+        if self.window and now - self.window[-1][0] > 2:
+            self.window.clear()
+        self.window.append((now, raw))
+        while len(self.window) > 1 and self.window[1][0] <= now - 3:
+            self.window.popleft()
+        if len(self.window) < 5 or now - self.window[0][0] < 3:
+            return
+        values = [v for _, v in self.window]
+        center = median(values)
+        if max(abs(v-center) for v in values) <= .3 * abs(self.factor):
+            self.offset = center
+            self.window.clear()

@@ -29,7 +29,7 @@ async function poll() {
     valid=item?.ok && !item.stale && Number.isFinite(d?.raw);
     if(valid){
       tared=d.tared;
-      el('health').textContent=tared?(d.g==null?'영점 완료 · 보정 필요':'무게 측정 중'):'영점 조정 필요 · RAW 측정 중';
+      el('health').textContent=tared?(d.g==null?'영점 완료 · 보정 필요':'무게 측정 중'):d.counts_per_g==null?'보정 계수 없음 · 수동 영점 후 무게추로 보정하세요':'시작 영점 대기 · 플랫폼을 비우고 ±0.3g 이내로 3초간 안정시키세요';
       el('raw').textContent=d.raw.toFixed(1); el('mass').textContent=d.g==null?'—':d.g.toFixed(1); el('factor').textContent=d.counts_per_g==null?'—':Number(d.counts_per_g.toPrecision(5));
       if(last!==item.updated_at){points.push(d.raw);if(points.length>60)points.shift();chart();last=item.updated_at;}
     }else{clearReading();el('health').textContent=item?.error || (item?.stale?'측정 지연':'로드셀 측정값 없음');}
