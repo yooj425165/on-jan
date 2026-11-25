@@ -25,7 +25,7 @@ class PourTests(unittest.TestCase):
         def sample():
             stamp = int(tick.now * 2) / 2
             return stamp, weight(stamp)
-        p = Pour(sample, Mock(), tick, lambda: True, lambda: tick.now)
+        p = Pour(sample, Mock(), tick, lambda: None, lambda: tick.now)
         p.cancel = tick
         return p
 
@@ -39,7 +39,7 @@ class PourTests(unittest.TestCase):
 
     def test_stable_weight_alone_never_arms(self):
         p = self.setup_pour(None, lambda t: 75)
-        p.cup_present = lambda: False
+        p.cup_issue = lambda: '잔 감지 범위 이탈: 12.50cm'
         servo = Mock()
         with self.assertRaisesRegex(ValueError, '잔 감지'):
             p.run(servo)
@@ -47,9 +47,9 @@ class PourTests(unittest.TestCase):
 
     def test_cup_removed_during_motion_returns(self):
         p = self.setup_pour(None, lambda t: 75)
-        p.cup_present = lambda: p.clock() < 5
+        p.cup_issue = lambda: None if p.clock() < 5 else '잔 감지 범위 이탈: 12.50cm (허용 7~11cm)'
         servo = Mock(ready=True, lock=threading.Lock())
-        with self.assertRaisesRegex(ValueError, '잔 미감지'):
+        with self.assertRaisesRegex(ValueError, r'모터 명령각 .*중단: 잔 감지 범위 이탈: 12\.50cm'):
             p.run(servo)
         self.assertEqual(servo.command_pair.call_args.args[0], (180,180))
         servo.disable.assert_called_once()

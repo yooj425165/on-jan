@@ -15,9 +15,9 @@ class TargetReached(Exception):
 
 
 class Pour:
-    def __init__(self, sample, report, stop, cup_present, clock=time.monotonic):
+    def __init__(self, sample, report, stop, cup_issue, clock=time.monotonic):
         self.sample, self.report, self.stop, self.clock = sample, report, stop, clock
-        self.cup_present = cup_present
+        self.cup_issue = cup_issue
         self.cancel = threading.Event()
 
     def check(self):
@@ -27,12 +27,15 @@ class Pour:
     def stable(self, seconds=8, wait_for_cup=False):
         window = deque(maxlen=7)
         end = self.clock() + seconds
+        detail = '측정 표본 부족'
         last = None
         while self.clock() < end:
             self.check()
-            if not self.cup_present():
+            issue = self.cup_issue()
+            if issue:
                 if not wait_for_cup:
-                    raise ValueError('잔 미감지 또는 거리 측정 오류')
+                    raise ValueError(issue)
+                detail = issue
                 window.clear()
                 last = None
                 self.cancel.wait(.08)
@@ -41,12 +44,14 @@ class Pour:
             if stamp != last:
                 window.append((stamp, g))
                 last = stamp
+            detail = f'연속 표본 {len(window)}/7개'
             if len(window) == 7 and window[-1][0] - window[0][0] >= 2:
                 v = [x for _, x in window]
+                detail = f'무게 범위 {max(v)-min(v):.2f}g (허용 2g), 앞뒤 중앙값 차이 {abs(median(v[-3:])-median(v[:3])):.2f}g (허용 0.6g)'
                 if max(v)-min(v) <= 2 and abs(median(v[-3:])-median(v[:3])) <= .6:
                     return median(v)
             self.cancel.wait(.08)
-        raise ValueError('잔 감지 / 무게 안정화 실패: 거리·진동·보정을 확인하세요.')
+        raise ValueError(f'{seconds}초 내 안정화 실패: {detail}')
 
     def run(self, servo):
         # Session-local zero: do not change HX711 calibration or tare during flow.
@@ -59,13 +64,14 @@ class Pour:
 
         def watch():
             self.check()
-            if not self.cup_present():
-                raise ValueError('잔 미감지 또는 거리 측정 오류: 주입 중단')
+            issue = self.cup_issue()
+            if issue:
+                raise ValueError(issue)
             if self.clock() >= limit:
                 raise ValueError('90초 시간 제한')
             stamp, g = self.sample()
             if g < baseline-3:
-                raise ValueError('컵 제거 또는 하중 감소')
+                raise ValueError(f'시작 대비 {g-baseline:+.2f}g (중단 기준 −3g 미만)')
             # A false early return is preferable to pouring through an overload.
             if g >= target:
                 raise TargetReached
@@ -102,17 +108,17 @@ class Pour:
                 if len(values)>=5:
                     m=median(values)
                     if any(b < a-2 for a,b in zip(values,values[1:])):
-                        raise ValueError('무게 반동 또는 하중 감소')
+                        raise ValueError(f'연속 표본 무게 감소 {max(a-b for a,b in zip(values,values[1:])):.2f}g (허용 2g)')
                     if median(abs(x-m) for x in values)>2 and not all(a<=b for a,b in zip(values,values[1:])):
-                        raise ValueError('측정 불안정: 추가 기울임 중단')
+                        raise ValueError(f'무게 불안정: 중앙절대편차 {median(abs(x-m) for x in values):.2f}g (허용 2g), 비단조 증가')
                     if m<baseline-2:
-                        raise ValueError('영점 이동 또는 잔 이탈')
+                        raise ValueError(f'중앙값이 시작 대비 {m-baseline:+.2f}g (중단 기준 −2g 미만)')
                     rising = median(values[-2:])-median(values[:2]) >= 1.0 and min(values[-3:]) >= baseline+3
                     flow = flow or rising
                     self.report('유입 추정' if flow else '유입 탐색', angles, m-baseline)
                     return rising
                 self.cancel.wait(.08)
-            raise ValueError('새 무게 샘플 부족')
+            raise ValueError(f'4초 내 새 무게 표본 {len(values)}/5개')
 
         with servo.lock:
             watch()
@@ -130,12 +136,21 @@ class Pour:
                 raise ValueError(reason)
             except TargetReached:
                 reason='목표선 감지 · 복귀 후 검증'
+            except Exception as exc:
+                reason = f'모터 명령각 {angles[0]:.1f}° / {angles[1]:.1f}°에서 중단: {exc}'
+                raise ValueError(reason) from exc
             finally:
                 try:
                     if servo.ready and not self.stop.is_set():
-                        self.report('복귀 중', angles, None); move((180,180),1.5,True); self.stop.wait(.4)
+                        self.report(f'복귀 중 · {reason}', angles, None); move((180,180),1.5,True); self.stop.wait(.4)
+                except Exception as exc:
+                    reason = f'{reason} · 복귀 실패: {exc}'
+                    raise RuntimeError(reason) from exc
                 finally:
-                    servo.disable()
+                    try:
+                        servo.disable()
+                    except Exception as exc:
+                        raise RuntimeError(f'{reason} · PWM 해제 실패: {exc}') from exc
         final = self.stable() - baseline
         if final < DOSE_G-REFERENCE_TOLERANCE_G:
             raise ValueError(f'복귀 후 {final:.1f}g: 순간 피크로 종료, 목표 도달 미확인')

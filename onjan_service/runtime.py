@@ -38,7 +38,7 @@ class Runtime:
         self.phase = "starting"
         self.job = None
         self.pour_state = {'dose_g': DOSE_G}
-        self.pour = Pour(self._weight_sample, self._pour_report, self.stop, self._cup_present)
+        self.pour = Pour(self._weight_sample, self._pour_report, self.stop, self._cup_issue)
         self.selection = None
         self.mic = {"status": "disabled" if not self.microphone else "waiting", "data": None}
         self.worker = threading.Thread(target=self._run, name="onjan-runtime")
@@ -131,22 +131,35 @@ class Runtime:
             with self.lock:
                 self.job.update(status="error", error=str(exc))
 
-    def _cup_present(self):
+    def _cup_issue(self):
         with self.hw.lock:
             item = self.hw.state.get('distance', {})
             cm = (item.get('data') or {}).get('cm')
-            return bool(item.get('ok') and 0 <= time.time()-item['updated_at'] <= 1
-                        and type(cm) in (int, float) and CUP_MIN_CM <= cm <= CUP_MAX_CM)
+            if not item.get('ok'):
+                return '초음파 읽기 실패: ' + (item.get('error') or '측정값 없음')
+            age = time.time()-item['updated_at']
+            if not 0 <= age <= 1:
+                return f'초음파 갱신 지연: {age:.2f}초 (허용 1초)'
+            if type(cm) not in (int, float) or not math.isfinite(cm):
+                return f'초음파 거리값 오류: {cm!r}'
+            if not CUP_MIN_CM <= cm <= CUP_MAX_CM:
+                return f'잔 감지 범위 이탈: {cm:.2f}cm (허용 {CUP_MIN_CM:g}~{CUP_MAX_CM:g}cm)'
+            return None
 
     def _weight_sample(self):
         with self.hw.lock:
             item = self.hw.state.get('weight', {})
             d = item.get('data') or {}
             g = d.get('g')
-            if (not item.get('ok') or not d.get('tared') or not d.get('counts_per_g')
-                    or not isinstance(g, (int,float)) or not math.isfinite(g)
-                    or not 0 <= time.time()-item['updated_at'] <= 2):
-                raise ValueError('최신 보정 무게가 없습니다. /weight에서 확인하세요.')
+            if not item.get('ok'):
+                raise ValueError('로드셀 읽기 실패: ' + (item.get('error') or '측정값 없음'))
+            age = time.time()-item['updated_at']
+            if not 0 <= age <= 2:
+                raise ValueError(f'로드셀 갱신 지연: {age:.2f}초 (허용 2초)')
+            if not d.get('tared') or not d.get('counts_per_g'):
+                raise ValueError('로드셀 ' + ('영점 미설정' if not d.get('tared') else '보정 계수 없음'))
+            if not isinstance(g, (int,float)) or not math.isfinite(g):
+                raise ValueError(f'로드셀 무게값 오류: {g!r}')
             return item['updated_at'], g
 
     def _pour_report(self, phase, angles, grams):
@@ -162,7 +175,7 @@ class Runtime:
             try:
                 return self.pour.run(self.hw.servos)
             except Exception as exc:
-                self._pour_report(str(exc), None, None)
+                self._pour_report('로테이션 중단 · ' + str(exc), None, None)
                 raise
         if action in ('servo_probe', 'servo_pulse', 'servo_cycle'):
             servo = self.hw.servos
