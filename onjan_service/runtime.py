@@ -12,7 +12,7 @@ from onjan.config import Config, ROOT
 import math
 from .iio import IioHardware
 from .automation import Automation
-from .pour import Pour
+from .pour import CUP_MIN_CM, CUP_MAX_CM, DOSE_G, Pour
 from .microphone import capture
 
 LOG = logging.getLogger(__name__)
@@ -37,12 +37,8 @@ class Runtime:
         self.automation = Automation()
         self.phase = "starting"
         self.job = None
-        self.pour_state = {}
-        self.pour = Pour(ROOT/'data'/'pour-refs.json', self._weight_sample, self._pour_report, self.stop)
-        try:
-            self.pour_state['refs'] = self.pour.refs()
-        except (ValueError, OSError):
-            LOG.warning('저장된 로테이션 기준을 읽지 못했습니다. 다시 설정하세요.')
+        self.pour_state = {'dose_g': DOSE_G}
+        self.pour = Pour(self._weight_sample, self._pour_report, self.stop, self._cup_present)
         self.selection = None
         self.mic = {"status": "disabled" if not self.microphone else "waiting", "data": None}
         self.worker = threading.Thread(target=self._run, name="onjan-runtime")
@@ -105,7 +101,7 @@ class Runtime:
 
     def submit(self, action, data):
         allowed = {"measure", "choose", "play", "stop", "tare", "calibrate", "automation", "capture", "servo_probe", "servo_pulse", "servo_cycle"}
-        allowed.update(('pour_empty','pour_full','pour_run','pour_cancel'))
+        allowed.update(('pour_run','pour_cancel'))
         if action not in allowed:
             raise ValueError("지원하지 않는 명령")
         with self.lock:
@@ -135,6 +131,13 @@ class Runtime:
             with self.lock:
                 self.job.update(status="error", error=str(exc))
 
+    def _cup_present(self):
+        with self.hw.lock:
+            item = self.hw.state.get('distance', {})
+            cm = (item.get('data') or {}).get('cm')
+            return bool(item.get('ok') and 0 <= time.time()-item['updated_at'] <= 1
+                        and type(cm) in (int, float) and CUP_MIN_CM <= cm <= CUP_MAX_CM)
+
     def _weight_sample(self):
         with self.hw.lock:
             item = self.hw.state.get('weight', {})
@@ -151,16 +154,11 @@ class Runtime:
             self.pour_state.update(phase=phase, angles=angles, grams=grams)
 
     def _perform(self, action, data):
-        if action in ('pour_empty','pour_full'):
-            refs = self.pour.save(action.split('_')[1])
-            with self.lock:
-                self.pour_state.update(refs=refs, phase='기준 저장')
-            return refs
         if action == 'pour_run':
             if not self.motor_test or not self.hw.servos:
                 raise ValueError('외부 전원 확인 및 PCA9685 연결 필요')
             self.valid_data(self.hw.snapshot(),'pca')
-            self._pour_report('빈 잔 확인', None, None)
+            self._pour_report('빈 잔 안정화 대기', None, None)
             try:
                 return self.pour.run(self.hw.servos)
             except Exception as exc:

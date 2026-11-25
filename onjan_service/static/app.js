@@ -37,10 +37,10 @@ async function poll() {
       $('servo-result').textContent = j.error || (j.status !== 'done' ? '처리 중' : j.action === 'servo_probe' ? '0x40 통신 성공 (V+ 감지 아님)' : j.action === 'servo_cycle' ? '양쪽 180° 복귀 명령 완료 · PWM OFF' : `CH${j.result.channel} · ${j.result.angle}° 명령 완료 · PWM OFF`);
     }
     pouring = state.job?.action==='pour_run' && state.job.status==='running';
-    const pour=state.pour, refs=pour.refs || {};
-    pourReady=armed && pca?.ok && !pca.stale && state.sensors.weight?.ok && !state.sensors.weight.stale && state.sensors.weight.data?.g!=null && refs.full!=null;
-    $('pour-refs').textContent=`빈 잔 ${refs.empty?.toFixed(1) ?? '미설정'} g / 목표 ${refs.full?.toFixed(1) ?? '미설정'} g`;
-    $('pour-state').textContent=`${pour.phase || '대기'} ${pour.angles ? '· 명령 '+pour.angles.map(a=>Math.round(a)+'°').join(' / ') : ''} ${pour.grams!=null ? '· '+pour.grams.toFixed(1)+' g' : ''}`;
+    const pour=state.pour;
+    pourReady=armed && pca?.ok && !pca.stale && state.sensors.weight?.ok && !state.sensors.weight.stale && state.sensors.weight.data?.g!=null;
+    $('pour-refs').textContent=`목표 주입량: +${pour.dose_g} g`;
+    $('pour-state').textContent=`${pour.phase || '대기'} ${pour.angles ? '· 명령 '+pour.angles.map(a=>Math.round(a)+'°').join(' / ') : ''} ${pour.grams!=null ? '· 순증가량 '+pour.grams.toFixed(1)+' g' : ''}`;
     connected = true;
     running = state.phase === 'starting' || state.job?.status === 'running';
     $('connection').textContent = `${state.phase} · ${new Date().toLocaleTimeString()}`;

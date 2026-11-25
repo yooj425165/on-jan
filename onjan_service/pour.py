@@ -1,11 +1,12 @@
 """Feedback-controlled, bounded bench pour. Units: seconds, grams, degrees."""
 from collections import deque
-import json
-import math
 from statistics import median
 import threading
 import time
 
+DOSE_G = 25.0
+CUP_MIN_CM = 7.0
+CUP_MAX_CM = 9.0
 REFERENCE_TOLERANCE_G = 5.0
 
 
@@ -14,23 +15,28 @@ class TargetReached(Exception):
 
 
 class Pour:
-    def __init__(self, path, sample, report, stop, clock=time.monotonic):
-        self.path, self.sample, self.report, self.stop, self.clock = path, sample, report, stop, clock
+    def __init__(self, sample, report, stop, cup_present, clock=time.monotonic):
+        self.sample, self.report, self.stop, self.clock = sample, report, stop, clock
+        self.cup_present = cup_present
         self.cancel = threading.Event()
-
-    def refs(self):
-        return json.loads(self.path.read_text()) if self.path.exists() else {}
 
     def check(self):
         if self.cancel.is_set() or self.stop.is_set():
             raise ValueError('정지 요청')
 
-    def stable(self, seconds=8):
+    def stable(self, seconds=8, wait_for_cup=False):
         window = deque(maxlen=7)
         end = self.clock() + seconds
         last = None
         while self.clock() < end:
             self.check()
+            if not self.cup_present():
+                if not wait_for_cup:
+                    raise ValueError('잔 미감지 또는 거리 측정 오류')
+                window.clear()
+                last = None
+                self.cancel.wait(.08)
+                continue
             stamp, g = self.sample()
             if stamp != last:
                 window.append((stamp, g))
@@ -40,31 +46,12 @@ class Pour:
                 if max(v)-min(v) <= 2 and abs(median(v[-3:])-median(v[:3])) <= .6:
                     return median(v)
             self.cancel.wait(.08)
-        raise ValueError('무게 안정화 실패: 진동·드리프트·보정을 확인하세요.')
-
-    def save(self, key):
-        refs = self.refs()
-        g = self.stable()
-        if key == 'empty':
-            if g <= 2:
-                raise ValueError('빈 플랫폼에서 영점을 잡은 뒤 빈 잔을 올리세요.')
-            refs = {'empty': g}
-        elif key == 'full' and 'empty' in refs and g >= refs['empty']+10:
-            refs['full'] = g
-        else:
-            raise ValueError('빈 잔을 먼저 저장하고 10g 이상 채워 주세요.')
-        tmp = self.path.with_suffix('.tmp')
-        tmp.write_text(json.dumps(refs, allow_nan=False)); tmp.replace(self.path)
-        return refs
+        raise ValueError('잔 감지 / 무게 안정화 실패: 거리·진동·보정을 확인하세요.')
 
     def run(self, servo):
-        refs = self.refs()
-        empty, target = refs.get('empty'), refs.get('full')
-        if not all(isinstance(g, (float,int)) and math.isfinite(g) for g in (empty,target)) or not 2 < empty <= target-10:
-            raise ValueError('빈 잔과 목표 잔을 먼저 저장하세요.')
-        baseline = self.stable()
-        if abs(baseline-empty) > REFERENCE_TOLERANCE_G:
-            raise ValueError('시작 무게가 저장한 빈 잔과 다릅니다.')
+        # Session-local zero: do not change HX711 calibration or tare during flow.
+        baseline = self.stable(wait_for_cup=True)
+        target = baseline + DOSE_G
         limit = self.clock()+90
         angles = (180,180)
         flow = False
@@ -72,6 +59,8 @@ class Pour:
 
         def watch():
             self.check()
+            if not self.cup_present():
+                raise ValueError('잔 미감지 또는 거리 측정 오류: 주입 중단')
             if self.clock() >= limit:
                 raise ValueError('90초 시간 제한')
             stamp, g = self.sample()
@@ -120,15 +109,16 @@ class Pour:
                         raise ValueError('영점 이동 또는 잔 이탈')
                     rising = median(values[-2:])-median(values[:2]) >= 1.0 and min(values[-3:]) >= baseline+3
                     flow = flow or rising
-                    self.report('유입 추정' if flow else '유입 탐색', angles, m)
+                    self.report('유입 추정' if flow else '유입 탐색', angles, m-baseline)
                     return rising
                 self.cancel.wait(.08)
             raise ValueError('새 무게 샘플 부족')
 
         with servo.lock:
+            watch()
             try:
                 self.check(); servo._enable(); servo.command_pair(angles)
-                self.report('시작 위치', angles, baseline)
+                self.report('시작 위치 · 주입량 영점 설정', angles, 0.0)
                 if self.cancel.wait(.6): self.check()
                 positions = [(100,50)] + [(100,b) for b in range(40,-1,-10)] + [(a,0) for a in range(90,-1,-10)]
                 for index,to in enumerate(positions):
@@ -146,10 +136,10 @@ class Pour:
                         self.report('복귀 중', angles, None); move((180,180),1.5,True); self.stop.wait(.4)
                 finally:
                     servo.disable()
-        final = self.stable()
-        if final < target-REFERENCE_TOLERANCE_G:
+        final = self.stable() - baseline
+        if final < DOSE_G-REFERENCE_TOLERANCE_G:
             raise ValueError(f'복귀 후 {final:.1f}g: 순간 피크로 종료, 목표 도달 미확인')
-        if final > target+REFERENCE_TOLERANCE_G:
+        if final > DOSE_G+REFERENCE_TOLERANCE_G:
             raise ValueError(f'복귀 후 {final:.1f}g: 목표 허용 범위 초과')
         self.report('복귀 후 목표 확인', (180,180), final)
-        return {'reason':'복귀 후 목표 확인','flow_detected':flow,'final_g':final}
+        return {'reason':'복귀 후 목표 확인','flow_detected':flow,'added_g':final}
