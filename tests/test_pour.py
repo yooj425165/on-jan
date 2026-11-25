@@ -47,7 +47,7 @@ class PourTests(unittest.TestCase):
 
     def test_cup_removed_during_motion_returns(self):
         p = self.setup_pour(None, lambda t: 75)
-        p.cup_issue = lambda: None if p.clock() < 5 else '잔 감지 범위 이탈: 12.50cm (허용 7~11cm)'
+        p.cup_issue = lambda: None if p.clock() < 5 else '잔 감지 범위 이탈: 12.50cm (허용 2~11cm)'
         servo = Mock(ready=True, lock=threading.Lock())
         with self.assertRaisesRegex(ValueError, r'모터 명령각 .*중단: 잔 감지 범위 이탈: 12\.50cm'):
             p.run(servo)
