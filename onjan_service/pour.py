@@ -5,7 +5,7 @@ import threading
 import time
 
 DOSE_G = 25.0
-CUP_MIN_CM = 9.0
+CUP_MIN_CM = 7.0
 CUP_MAX_CM = 11.0
 REFERENCE_TOLERANCE_G = 5.0
 
