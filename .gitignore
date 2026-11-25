@@ -13,3 +13,5 @@ artifacts/
 data/examples/ai-demo-generated.csv
 data/ambient-features.jsonl
 data/measurement-rounds.jsonl
+data/pour-refs.json
+data/pour-refs.tmp

@@ -12,6 +12,7 @@ from onjan.config import Config, ROOT
 import math
 from .iio import IioHardware
 from .automation import Automation
+from .pour import Pour
 from .microphone import capture
 
 LOG = logging.getLogger(__name__)
@@ -36,6 +37,12 @@ class Runtime:
         self.automation = Automation()
         self.phase = "starting"
         self.job = None
+        self.pour_state = {}
+        self.pour = Pour(ROOT/'data'/'pour-refs.json', self._weight_sample, self._pour_report, self.stop)
+        try:
+            self.pour_state['refs'] = self.pour.refs()
+        except (ValueError, OSError):
+            LOG.warning('저장된 로테이션 기준을 읽지 못했습니다. 다시 설정하세요.')
         self.selection = None
         self.mic = {"status": "disabled" if not self.microphone else "waiting", "data": None}
         self.worker = threading.Thread(target=self._run, name="onjan-runtime")
@@ -90,6 +97,7 @@ class Runtime:
         result = self.hw.snapshot()
         with self.lock:
             result.update(phase=self.phase, job=copy.deepcopy(self.job),
+                          pour=copy.deepcopy(self.pour_state),
                           servo_control='manual_test' if self.motor_test else 'locked',
                           selection=copy.deepcopy(self.selection), moods=list(self.catalog["lists"]),
                           automation=self.automation.snapshot(), microphone=copy.deepcopy(self.mic))
@@ -97,14 +105,22 @@ class Runtime:
 
     def submit(self, action, data):
         allowed = {"measure", "choose", "play", "stop", "tare", "calibrate", "automation", "capture", "servo_probe", "servo_pulse", "servo_cycle"}
+        allowed.update(('pour_empty','pour_full','pour_run','pour_cancel'))
         if action not in allowed:
             raise ValueError("지원하지 않는 명령")
         with self.lock:
+            if action == 'pour_cancel':
+                if not self.job or self.job['action'] != 'pour_run' or self.job['status'] != 'running':
+                    raise ValueError('진행 중인 로테이션 없음')
+                self.pour.cancel.set()
+                return self.job['id']
             if self.stop.is_set() or self.phase == "starting":
                 raise ValueError("초기화 또는 종료 중입니다.")
             if self.job and self.job["status"] == "running":
                 raise ValueError("이전 명령 처리 중입니다. 완료 후 다시 요청하세요.")
             job_id = uuid.uuid4().hex
+            if action.startswith('pour_'):
+                self.pour.cancel.clear()
             self.job = {"id": job_id, "action": action, "status": "running", "error": None}
             self.pool.submit(self._command, action, data)
             return job_id
@@ -119,7 +135,37 @@ class Runtime:
             with self.lock:
                 self.job.update(status="error", error=str(exc))
 
+    def _weight_sample(self):
+        with self.hw.lock:
+            item = self.hw.state.get('weight', {})
+            d = item.get('data') or {}
+            g = d.get('g')
+            if (not item.get('ok') or not d.get('tared') or not d.get('counts_per_g')
+                    or not isinstance(g, (int,float)) or not math.isfinite(g)
+                    or not 0 <= time.time()-item['updated_at'] <= 2):
+                raise ValueError('최신 보정 무게가 없습니다. /weight에서 확인하세요.')
+            return item['updated_at'], g
+
+    def _pour_report(self, phase, angles, grams):
+        with self.lock:
+            self.pour_state.update(phase=phase, angles=angles, grams=grams)
+
     def _perform(self, action, data):
+        if action in ('pour_empty','pour_full'):
+            refs = self.pour.save(action.split('_')[1])
+            with self.lock:
+                self.pour_state.update(refs=refs, phase='기준 저장')
+            return refs
+        if action == 'pour_run':
+            if not self.motor_test or not self.hw.servos:
+                raise ValueError('외부 전원 확인 및 PCA9685 연결 필요')
+            self.valid_data(self.hw.snapshot(),'pca')
+            self._pour_report('빈 잔 확인', None, None)
+            try:
+                return self.pour.run(self.hw.servos)
+            except Exception as exc:
+                self._pour_report(str(exc), None, None)
+                raise
         if action in ('servo_probe', 'servo_pulse', 'servo_cycle'):
             servo = self.hw.servos
             if servo is None:

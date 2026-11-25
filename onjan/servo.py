@@ -59,6 +59,15 @@ class Servos:
                                            self._pulse_bytes(angle))
         self.angles[channel] = angle
 
+    def command_pair(self, angles):
+        if not self.ready or self.stopping.is_set() or not all(
+                self.c.servo_min_angle <= a <= self.c.servo_max_angle for a in angles):
+            raise ValueError('서보 출력 또는 각도 범위 확인')
+        with self.i2c.lock:
+            self.i2c.bus.write_i2c_block_data(0x40, 0x06,
+                self._pulse_bytes(angles[0]) + self._pulse_bytes(angles[1]))
+        self.angles.update(enumerate(angles))
+
     def tilt_cycle(self, stop):
         home, tilted = (180, 180), (100, 50)
         if not all(self.c.servo_min_angle <= a <= self.c.servo_max_angle for a in (*home, *tilted)):

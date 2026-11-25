@@ -1,9 +1,9 @@
 const $ = id => document.getElementById(id);
 let sending = false, running = false, connected = false;
-let micEnabled = false;
-function buttons() {document.querySelectorAll('button').forEach(b => b.disabled = sending || running || !connected || (!micEnabled && b.matches('[data-action="measure"]')));}
+let micEnabled = false, pouring = false, pourReady = false;
+function buttons() {document.querySelectorAll('button').forEach(b => b.disabled = b.id === 'pour-cancel' ? !connected || !pouring : sending || running || !connected || (!pourReady && b.dataset.action==='pour_run') || (!micEnabled && b.matches('[data-action="measure"]')));}
 async function command(action, data={}) {
-  if (sending || running) return;
+  if ((sending || running) && action !== 'pour_cancel') return;
   sending = true; buttons();
   try {
     const response = await fetch(`/api/commands/${action}`, {method:'POST', headers:{'Content-Type':'application/json','X-Onjan-Token':token}, body:JSON.stringify(data)});
@@ -17,6 +17,7 @@ async function command(action, data={}) {
 document.querySelectorAll('[data-action]').forEach(b => b.onclick = () => command(b.dataset.action));
 $('choose').onclick = () => command('choose',{mood:$('mood').value});
 $('play').onclick = () => command('play',{file:$('tracks').value});
+$('pour-cancel').onclick = () => command('pour_cancel');
 $('arm').onclick = () => command('automation',{enabled:true});
 $('disarm').onclick = () => command('automation',{enabled:false});
 $('servo-pulse').onclick = () => {
@@ -35,6 +36,11 @@ async function poll() {
       const j=state.job;
       $('servo-result').textContent = j.error || (j.status !== 'done' ? '처리 중' : j.action === 'servo_probe' ? '0x40 통신 성공 (V+ 감지 아님)' : j.action === 'servo_cycle' ? '양쪽 180° 복귀 명령 완료 · PWM OFF' : `CH${j.result.channel} · ${j.result.angle}° 명령 완료 · PWM OFF`);
     }
+    pouring = state.job?.action==='pour_run' && state.job.status==='running';
+    const pour=state.pour, refs=pour.refs || {};
+    pourReady=armed && pca?.ok && !pca.stale && state.sensors.weight?.ok && !state.sensors.weight.stale && state.sensors.weight.data?.g!=null && refs.full!=null;
+    $('pour-refs').textContent=`빈 잔 ${refs.empty?.toFixed(1) ?? '미설정'} g / 목표 ${refs.full?.toFixed(1) ?? '미설정'} g`;
+    $('pour-state').textContent=`${pour.phase || '대기'} ${pour.angles ? '· 명령 '+pour.angles.map(a=>Math.round(a)+'°').join(' / ') : ''} ${pour.grams!=null ? '· '+pour.grams.toFixed(1)+' g' : ''}`;
     connected = true;
     running = state.phase === 'starting' || state.job?.status === 'running';
     $('connection').textContent = `${state.phase} · ${new Date().toLocaleTimeString()}`;
