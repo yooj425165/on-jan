@@ -6,6 +6,8 @@ from statistics import median
 import threading
 import time
 
+REFERENCE_TOLERANCE_G = 5.0
+
 
 class TargetReached(Exception):
     pass
@@ -61,7 +63,7 @@ class Pour:
         if not all(isinstance(g, (float,int)) and math.isfinite(g) for g in (empty,target)) or not 2 < empty <= target-10:
             raise ValueError('빈 잔과 목표 잔을 먼저 저장하세요.')
         baseline = self.stable()
-        if abs(baseline-empty) > 2:
+        if abs(baseline-empty) > REFERENCE_TOLERANCE_G:
             raise ValueError('시작 무게가 저장한 빈 잔과 다릅니다.')
         limit = self.clock()+90
         angles = (180,180)
@@ -145,7 +147,9 @@ class Pour:
                 finally:
                     servo.disable()
         final = self.stable()
-        if final < target-2:
+        if final < target-REFERENCE_TOLERANCE_G:
             raise ValueError(f'복귀 후 {final:.1f}g: 순간 피크로 종료, 목표 도달 미확인')
+        if final > target+REFERENCE_TOLERANCE_G:
+            raise ValueError(f'복귀 후 {final:.1f}g: 목표 허용 범위 초과')
         self.report('복귀 후 목표 확인', (180,180), final)
         return {'reason':'복귀 후 목표 확인','flow_detected':flow,'final_g':final}
