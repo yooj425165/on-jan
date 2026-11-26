@@ -4,7 +4,7 @@ from statistics import median
 import threading
 import time
 
-DOSE_G = 22.0
+DOSE_G = 25.0
 CUP_MIN_CM = 2.0
 CUP_MAX_CM = 11.0
 REFERENCE_TOLERANCE_G = 5.0
