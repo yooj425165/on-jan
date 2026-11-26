@@ -61,6 +61,7 @@ class Pour:
         angles = (180,180)
         flow = False
         reason = '각도 한계까지 목표 미도달'
+        trend = deque(maxlen=3)
 
         def watch():
             self.check()
@@ -74,7 +75,13 @@ class Pour:
                 raise ValueError(f'시작 대비 {g-baseline:+.2f}g (중단 기준 −3g 미만)')
             # A false early return is preferable to pouring through an overload.
             if g >= target:
-                raise TargetReached
+                raise TargetReached('목표선 감지')
+            if not trend or stamp > trend[-1][0]:
+                trend.append((stamp, g))
+            if len(trend) == 3 and g >= target-4:
+                (t0, a), (_, b), (t1, c) = trend
+                if a < b < c and .3 <= t1-t0 <= 3 and g + (c-a)/(t1-t0)*1.5 >= target:
+                    raise TargetReached(f'잔류 유입 예상 · {g-baseline:.1f}g에서 선복귀')
             return stamp, g
 
         def move(to, duration, returning=False):
@@ -126,16 +133,16 @@ class Pour:
                 self.check(); servo._enable(); servo.command_pair(angles)
                 self.report('시작 위치 · 주입량 영점 설정', angles, 0.0)
                 if self.cancel.wait(.6): self.check()
-                positions = [(100,50)] + [(100,b) for b in range(40,-1,-10)] + [(a,0) for a in range(90,-1,-10)]
+                positions = [(100,b) for b in range(80,-1,-5)] + [(a,0) for a in range(95,-1,-5)]
                 for index,to in enumerate(positions):
                     self.report('기울이는 중', to, None)
-                    move(to, 4 if index==0 else .7)
+                    move(to, 3.5 if index==0 else .3)
                     # If weight is already increasing, do not increase the pour rate.
                     while observe():
                         self.report('현재 각도 유지 · 무게 증가 중', angles, None)
                 raise ValueError(reason)
-            except TargetReached:
-                reason='목표선 감지 · 복귀 후 검증'
+            except TargetReached as exc:
+                reason=f'{exc} · 복귀 후 검증'
             except Exception as exc:
                 reason = f'모터 명령각 {angles[0]:.1f}° / {angles[1]:.1f}°에서 중단: {exc}'
                 raise ValueError(reason) from exc
