@@ -30,6 +30,7 @@ class LoadCell:
 
 class IioHardware(HardwareService):
     track_negative = None
+    track_waiting = None
     empty_limit_cm = CUP_MAX_CM
 
     def empty_platform_distance(self):
@@ -45,6 +46,7 @@ class IioHardware(HardwareService):
             self.weight.offset = offset
             self.weight.empty_check = self.empty_platform_distance
             self.weight.track_negative = self.track_negative
+            self.weight.track_waiting = self.track_waiting
         except Exception as exc:
             self.error('weight', exc)
         else:
