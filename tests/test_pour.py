@@ -68,14 +68,14 @@ class PourTests(unittest.TestCase):
                 self.assertEqual(servo.command_pair.call_args.args[0], (180,180))
 
     def test_absolute_target_includes_cup(self):
-        p = self.setup_pour(None, lambda t: 45 if t<10 else min(68,45+(t-10)*3))
+        p = self.setup_pour(None, lambda t: 45 if t<10 else min(80,45+(t-10)*3))
         servo = Mock(ready=True, lock=threading.Lock())
-        self.assertEqual(p.run(servo, absolute=True)['total_g'], 68)
+        self.assertEqual(p.run(servo, absolute=True)['total_g'], 80)
         servo.disable.assert_called_once()
 
     def test_full_cup_does_not_move(self):
-        p = self.setup_pour(None, lambda t: 68)
+        p = self.setup_pour(None, lambda t: 80)
         servo = Mock()
-        with self.assertRaisesRegex(ValueError, '68g 미만'):
+        with self.assertRaisesRegex(ValueError, '80g 미만'):
             p.run(servo, absolute=True)
         servo._enable.assert_not_called()
