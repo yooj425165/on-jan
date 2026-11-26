@@ -13,6 +13,7 @@ def capture(device, rate=48000, on_level=None):
     cmd = ["arecord", "-q", "-D", device, "-t", "raw", "-f", "S32_LE",
            "-c", "2", "-r", str(rate), "-d", "2"]
     raw = bytearray()
+    levels = []
     step = max(1, rate // 10) * 8
     end = step
     with tempfile.TemporaryFile() as errors, subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=errors) as proc:
@@ -28,8 +29,9 @@ def capture(device, rate=48000, on_level=None):
                 raw.extend(chunk)
                 if len(raw) >= end:
                     block = np.frombuffer(raw[end-step:end], dtype='<i4')[::2].astype(float) / 2**31
+                    levels.append(round(20 * math.log10(max(float(np.sqrt(np.mean(block**2))), 1e-12)), 1))
                     if on_level:
-                        on_level(round(20 * math.log10(max(float(np.sqrt(np.mean(block**2))), 1e-12)), 1))
+                        on_level(levels[-1])
                     end += step
             if proc.wait(timeout=max(.01, deadline-time.monotonic())):
                 errors.seek(0)
@@ -45,6 +47,7 @@ def capture(device, rate=48000, on_level=None):
         raise ValueError("마이크 왼쪽 채널이 무음(모두 0): L/R·배선·드라이버 확인")
     rms = float(np.sqrt(np.mean(samples**2)))
     return {"rms_dbfs": round(20 * math.log10(max(rms, 1e-12)), 2),
+            "levels_dbfs": levels,
             "peak_dbfs": round(20 * math.log10(peak), 2),
             "clipping_ratio": float(np.mean(np.abs(samples) >= 0.999)),
             "source": "alsa_left_s32le", "device": device,
