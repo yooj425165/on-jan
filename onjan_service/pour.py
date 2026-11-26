@@ -99,10 +99,10 @@ class Pour:
                 if u >= 1: break
                 self.stop.wait(.04)
 
-        def observe():
+        def observe(quick=False):
             # Exclude motion and ring-down; use only new, distinct post-settle samples.
             nonlocal flow
-            settled = self.clock()+1
+            settled = self.clock()+(.25 if quick else 1)
             while self.clock()<settled:
                 watch(); self.cancel.wait(.08)
             stamps, values = set(), []
@@ -112,6 +112,8 @@ class Pour:
                 stamp,g=watch()
                 if stamp>first_stamp and stamp not in stamps:
                     stamps.add(stamp); values.append(g)
+                if quick and len(values)==2 and all(abs(v-baseline)<=1 for v in values) and abs(values[1]-values[0])<=.3:
+                    return False
                 if len(values)>=5:
                     m=median(values)
                     if any(b < a-2 for a,b in zip(values,values[1:])):
@@ -136,9 +138,9 @@ class Pour:
                 positions = [(100,b) for b in range(80,-1,-5)] + [(a,0) for a in range(95,-1,-5)]
                 for index,to in enumerate(positions):
                     self.report('기울이는 중', to, None)
-                    move(to, 3.5 if index==0 else .3)
+                    move(to, 3.0 if index==0 else .16)
                     # If weight is already increasing, do not increase the pour rate.
-                    while observe():
+                    while observe(quick=index>0 and not flow):
                         self.report('현재 각도 유지 · 무게 증가 중', angles, None)
                 raise ValueError(reason)
             except TargetReached as exc:
