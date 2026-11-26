@@ -6,7 +6,8 @@ import time
 
 DOSE_G = 25.0
 CUP_MIN_CM = 2.0
-CUP_MAX_CM = 11.0
+CUP_MAX_CM = 13.0
+TOTAL_G = 68.0
 REFERENCE_TOLERANCE_G = 5.0
 
 
@@ -26,7 +27,7 @@ class Pour:
 
     def stable(self, seconds=8, wait_for_cup=False):
         window = deque(maxlen=7)
-        end = self.clock() + seconds
+        end = self.clock() + seconds if seconds is not None else float('inf')
         detail = '측정 표본 부족'
         last = None
         while self.clock() < end:
@@ -53,10 +54,13 @@ class Pour:
             self.cancel.wait(.08)
         raise ValueError(f'{seconds}초 내 안정화 실패: {detail}')
 
-    def run(self, servo):
+    def run(self, servo, absolute=False):
         # Session-local zero: do not change HX711 calibration or tare during flow.
-        baseline = self.stable(wait_for_cup=True)
-        target = baseline + DOSE_G
+        baseline = self.stable(seconds=None) if absolute else self.stable(wait_for_cup=True)
+        target = TOTAL_G if absolute else baseline + DOSE_G
+        origin = 0 if absolute else baseline
+        if absolute and not 5 <= baseline < target:
+            raise ValueError(f'시작 무게 {baseline:.1f}g: 5g 이상, {target:g}g 미만 필요')
         limit = self.clock()+90
         angles = (180,180)
         flow = False
@@ -78,7 +82,7 @@ class Pour:
                 raise TargetReached('목표선 감지')
             if not trend or stamp > trend[-1][0]:
                 trend.append((stamp, g))
-            if len(trend) == 3 and g >= target-4:
+            if not absolute and len(trend) == 3 and g >= target-4:
                 (t0, a), (_, b), (t1, c) = trend
                 if a < b < c and .3 <= t1-t0 <= 3 and g + (c-a)/(t1-t0)*1.5 >= target:
                     raise TargetReached(f'잔류 유입 예상 · {g-baseline:.1f}g에서 선복귀')
@@ -124,21 +128,24 @@ class Pour:
                         raise ValueError(f'중앙값이 시작 대비 {m-baseline:+.2f}g (중단 기준 −2g 미만)')
                     rising = median(values[-2:])-median(values[:2]) >= 1.0 and min(values[-3:]) >= baseline+3
                     flow = flow or rising
-                    self.report('유입 추정' if flow else '유입 탐색', angles, m-baseline)
+                    self.report('유입 추정' if flow else '유입 탐색', angles, m-origin)
                     return rising
                 self.cancel.wait(.08)
             raise ValueError(f'4초 내 새 무게 표본 {len(values)}/5개')
 
         with servo.lock:
-            watch()
+            try:
+                watch()
+            except TargetReached as exc:
+                raise ValueError('구동 전 이미 목표 도달') from exc
             try:
                 self.check(); servo._enable(); servo.command_pair(angles)
-                self.report('시작 위치 · 주입량 영점 설정', angles, 0.0)
+                self.report('시작 위치 · 총무게 감시' if absolute else '시작 위치 · 주입량 영점 설정', angles, baseline-origin)
                 if self.cancel.wait(.6): self.check()
                 positions = [(100,b) for b in range(80,-1,-5)] + [(a,0) for a in range(95,-1,-5)]
                 for index,to in enumerate(positions):
                     self.report('기울이는 중', to, None)
-                    move(to, 3.0 if index==0 else .16)
+                    move(to, (2.7 if index==0 else .14) if absolute else (3.0 if index==0 else .16))
                     # If weight is already increasing, do not increase the pour rate.
                     while observe(quick=index>0 and not flow):
                         self.report('현재 각도 유지 · 무게 증가 중', angles, None)
@@ -160,10 +167,10 @@ class Pour:
                         servo.disable()
                     except Exception as exc:
                         raise RuntimeError(f'{reason} · PWM 해제 실패: {exc}') from exc
-        final = self.stable() - baseline
-        if final < DOSE_G-REFERENCE_TOLERANCE_G:
+        final = self.stable() - origin
+        if final < target-origin-REFERENCE_TOLERANCE_G:
             raise ValueError(f'복귀 후 {final:.1f}g: 순간 피크로 종료, 목표 도달 미확인')
-        if final > DOSE_G+REFERENCE_TOLERANCE_G:
+        if final > target-origin+REFERENCE_TOLERANCE_G:
             raise ValueError(f'복귀 후 {final:.1f}g: 목표 허용 범위 초과')
         self.report('복귀 후 목표 확인', (180,180), final)
-        return {'reason':'복귀 후 목표 확인','flow_detected':flow,'added_g':final}
+        return {'reason':'복귀 후 목표 확인','flow_detected':flow,('total_g' if absolute else 'added_g'):final}

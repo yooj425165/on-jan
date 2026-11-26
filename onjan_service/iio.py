@@ -1,6 +1,8 @@
 """Integrated GPIO sensors are kernel-owned IIO devices, not DMA clients."""
 from pathlib import Path
 import threading
+import time
+from .pour import CUP_MAX_CM
 
 from onjan.sensors import filtered_mean
 from onjan.service import HardwareService
@@ -25,11 +27,18 @@ class LoadCell:
 
 
 class IioHardware(HardwareService):
+    def empty_platform_distance(self):
+        with self.lock:
+            d = self.state.get('distance', {})
+            return (d.get('ok') and 0 <= time.time()-d['updated_at'] <= 1 and
+                    CUP_MAX_CM < d['data']['cm'] <= 400)
+
     def start_gpio(self, offset=None):
         try:
             self.weight = Weight(LoadCell(), self.config.calibration_path.with_name('iio-calibration.json'),
                                  self.config.change_g, startup_zero=True)
             self.weight.offset = offset
+            self.weight.empty_check = self.empty_platform_distance
         except Exception as exc:
             self.error('weight', exc)
         else:

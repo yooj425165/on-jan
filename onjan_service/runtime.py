@@ -19,11 +19,14 @@ LOG = logging.getLogger(__name__)
 
 
 class Runtime:
-    def __init__(self, audio_device, hardware=True, microphone=None, motor_test=False, travel=None):
+    def __init__(self, audio_device, hardware=True, microphone=None, motor_test=False, travel=None, auto_fill=False):
         if travel not in (None, 180, 360):
             raise ValueError('travel: 180 또는 360')
         self.travel = travel
         self.motor_test = hardware and motor_test
+        if auto_fill and not self.motor_test:
+            raise ValueError('자동 주입에는 외부 전원 확인이 필요합니다.')
+        self.auto_phase = '빈 받침대 확인' if auto_fill else None
         self.hw = IioHardware(Config(audio_device=audio_device, servo_enabled=self.motor_test,
                                      servo_power_confirmed=self.motor_test, servo_travel_deg=travel or 180,
                                      servo_max_angle=travel or 180))
@@ -85,6 +88,7 @@ class Runtime:
                                 self.queue.clear()
                                 self.selection['error'] = str(exc)
                     self.automation.update(grams, time.monotonic(), near)
+                    self._auto_tick()
         except Exception:
             LOG.exception("Runtime failed")
             self.phase = "error"
@@ -94,6 +98,7 @@ class Runtime:
         with self.lock:
             result.update(phase=self.phase, job=copy.deepcopy(self.job),
                           pour=copy.deepcopy(self.pour_state),
+                          auto_fill=self.auto_phase,
                           servo_control='manual_test' if self.motor_test else 'locked',
                           selection=copy.deepcopy(self.selection), moods=list(self.catalog["lists"]),
                           automation=self.automation.snapshot(), microphone=copy.deepcopy(self.mic))
@@ -106,10 +111,12 @@ class Runtime:
             raise ValueError("지원하지 않는 명령")
         with self.lock:
             if action == 'pour_cancel':
-                if not self.job or self.job['action'] != 'pour_run' or self.job['status'] != 'running':
+                if not self.job or self.job['action'] not in ('pour_run','auto_run') or self.job['status'] != 'running':
                     raise ValueError('진행 중인 로테이션 없음')
                 self.pour.cancel.set()
                 return self.job['id']
+            if self.auto_phase and action in ('pour_run','servo_pulse','servo_cycle','tare','calibrate'):
+                raise ValueError('자동 주입 활성 상태: 수동 작업은 --auto-fill 없이 실행하세요.')
             if self.stop.is_set() or self.phase == "starting":
                 raise ValueError("초기화 또는 종료 중입니다.")
             if self.job and self.job["status"] == "running":
@@ -121,6 +128,29 @@ class Runtime:
             self.pool.submit(self._command, action, data)
             return job_id
 
+    def _auto_tick(self):
+        if not self.auto_phase or self.stop.is_set() or (self.job and self.job['status']=='running'):
+            return
+        try:
+            _, g = self._weight_sample()
+        except ValueError:
+            return
+        w = self.hw.weight
+        if self.auto_phase == '잔 제거 대기':
+            if self.hw.empty_platform_distance() and abs(g) <= 5:
+                with w.sensor.lock:
+                    w.window.clear()
+                    w.rezero = True
+                self.auto_phase = '빈 받침대 확인'
+        elif self.auto_phase == '빈 받침대 확인':
+            if not w.rezero and abs(g) <= 5 and self.hw.empty_platform_distance():
+                self.auto_phase = '잔 대기'
+        elif self.auto_phase == '잔 대기' and g > 5 and self._cup_issue() is None:
+            self.auto_phase = '잔 안정화 / 자동 주입'
+            self.pour.cancel.clear()
+            self.job = dict(id=uuid.uuid4().hex, action='auto_run', status='running', error=None)
+            self.pool.submit(self._command, 'auto_run', {})
+
     def _command(self, action, data):
         try:
             result = self._perform(action, data)
@@ -130,6 +160,10 @@ class Runtime:
             LOG.exception("Command %s failed", action)
             with self.lock:
                 self.job.update(status="error", error=str(exc))
+        finally:
+            if action == 'auto_run':
+                with self.lock:
+                    self.auto_phase = '잔 제거 대기'
 
     def _cup_issue(self):
         with self.hw.lock:
@@ -167,13 +201,13 @@ class Runtime:
             self.pour_state.update(phase=phase, angles=angles, grams=grams)
 
     def _perform(self, action, data):
-        if action == 'pour_run':
+        if action in ('pour_run','auto_run'):
             if not self.motor_test or not self.hw.servos:
                 raise ValueError('외부 전원 확인 및 PCA9685 연결 필요')
             self.valid_data(self.hw.snapshot(),'pca')
             self._pour_report('빈 잔 안정화 대기', None, None)
             try:
-                return self.pour.run(self.hw.servos)
+                return self.pour.run(self.hw.servos, absolute=action=='auto_run')
             except Exception as exc:
                 self._pour_report('로테이션 중단 · ' + str(exc), None, None)
                 raise
