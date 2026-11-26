@@ -29,11 +29,13 @@ class LoadCell:
 
 
 class IioHardware(HardwareService):
+    empty_limit_cm = CUP_MAX_CM
+
     def empty_platform_distance(self):
         with self.lock:
             d = self.state.get('distance', {})
             return (d.get('ok') and 0 <= time.time()-d['updated_at'] <= 1 and
-                    CUP_MAX_CM < d['data']['cm'] <= 400)
+                    self.empty_limit_cm < d['data']['cm'] <= 400)
 
     def start_gpio(self, offset=None):
         try:
@@ -63,9 +65,10 @@ class IioHardware(HardwareService):
                 now = time.monotonic()
                 while recent and now - recent[0][0] > 1:
                     recent.popleft()
-                recent.append((now, raw))
-                cm = median(v for _, v in recent) if len(recent) == 3 else raw
-                return {'cm': cm, 'raw_cm': raw, 'near': cm <= self.config.near_cm}
+                recent.append((now, time.time(), raw))
+                cm = median(v for _, _, v in recent) if len(recent) == 3 else raw
+                return {'cm': cm, 'raw_cm': raw, 'near': cm <= self.config.near_cm,
+                        'samples': [(stamp, v) for _, stamp, v in recent]}
             self._launch('distance', distance)
 
     def _launch(self, name, reader):

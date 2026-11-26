@@ -16,6 +16,7 @@ from .pour import CUP_MIN_CM, CUP_MAX_CM, DOSE_G, Pour
 from .microphone import capture
 
 LOG = logging.getLogger(__name__)
+AUTO_DISTANCE_CM = 16.0
 
 
 class Runtime:
@@ -31,6 +32,9 @@ class Runtime:
                                      servo_power_confirmed=self.motor_test, servo_travel_deg=travel or 180,
                                      servo_max_angle=travel or 180))
         self.hardware = hardware
+        self.load_since = None
+        if auto_fill:
+            self.hw.empty_limit_cm = AUTO_DISTANCE_CM
         self.microphone = (microphone or "plughw:CARD=sndrpigooglevoi,DEV=0") if hardware else None
         self.lock = threading.RLock()
         self.stop = threading.Event()
@@ -132,8 +136,9 @@ class Runtime:
         if not self.auto_phase or self.stop.is_set() or (self.job and self.job['status']=='running'):
             return
         try:
-            _, g = self._weight_sample()
+            stamp, g = self._weight_sample()
         except ValueError:
+            self.load_since = None
             return
         w = self.hw.weight
         if self.auto_phase == '잔 제거 대기':
@@ -145,7 +150,14 @@ class Runtime:
         elif self.auto_phase == '빈 받침대 확인':
             if not w.rezero and abs(g) <= 5 and self.hw.empty_platform_distance():
                 self.auto_phase = '잔 대기'
-        elif self.auto_phase == '잔 대기' and g > 5 and self._cup_issue() is None:
+        elif self.auto_phase == '잔 대기':
+            if g <= 5:
+                self.load_since = None
+                return
+            if self.load_since is None:
+                self.load_since = stamp
+            if self._cup_issue() is not None:
+                return
             self.auto_phase = '잔 안정화 / 자동 주입'
             self.pour.cancel.clear()
             self.job = dict(id=uuid.uuid4().hex, action='auto_run', status='running', error=None)
@@ -164,6 +176,7 @@ class Runtime:
             if action == 'auto_run':
                 with self.lock:
                     self.auto_phase = '잔 제거 대기'
+                    self.load_since = None
 
     def _cup_issue(self):
         with self.hw.lock:
@@ -174,10 +187,18 @@ class Runtime:
             age = time.time()-item['updated_at']
             if not 0 <= age <= 1:
                 return f'초음파 갱신 지연: {age:.2f}초 (허용 1초)'
+            limit = CUP_MAX_CM
+            if self.auto_phase:
+                recent = [v for stamp, v in item['data'].get('samples', ())
+                          if self.load_since is not None and stamp > self.load_since and 0 <= time.time()-stamp <= 1]
+                if len(recent) < 3:
+                    return f'하중 감지 이후 거리 표본 {len(recent)}/3개'
+                cm = sum(recent)/len(recent)
+                limit = AUTO_DISTANCE_CM
             if type(cm) not in (int, float) or not math.isfinite(cm):
                 return f'초음파 거리값 오류: {cm!r}'
-            if not CUP_MIN_CM <= cm <= CUP_MAX_CM:
-                return f'잔 감지 범위 이탈: {cm:.2f}cm (허용 {CUP_MIN_CM:g}~{CUP_MAX_CM:g}cm)'
+            if not CUP_MIN_CM <= cm <= limit:
+                return f'잔 감지 범위 이탈: {cm:.2f}cm (허용 {CUP_MIN_CM:g}~{limit:g}cm)'
             return None
 
     def _weight_sample(self):
