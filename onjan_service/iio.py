@@ -1,5 +1,7 @@
 """Integrated GPIO sensors are kernel-owned IIO devices, not DMA clients."""
 from pathlib import Path
+from collections import deque
+from statistics import median
 import threading
 import time
 from .pour import CUP_MAX_CM
@@ -48,12 +50,22 @@ class IioHardware(HardwareService):
         except Exception as exc:
             self.error('distance', exc)
         else:
+            recent = deque(maxlen=3)
             def distance():
                 # Linux srf04 raw distance is millimetres (scale = 0.001 metres).
-                cm = int((path / 'in_distance_raw').read_text()) / 10
-                if not 2 <= cm <= 400:
-                    raise ValueError('초음파 측정 범위 밖')
-                return {'cm': cm, 'near': cm <= self.config.near_cm}
+                try:
+                    raw = int((path / 'in_distance_raw').read_text()) / 10
+                    if not 2 <= raw <= 400:
+                        raise ValueError('초음파 측정 범위 밖')
+                except (ValueError, OSError):
+                    recent.clear()
+                    raise
+                now = time.monotonic()
+                while recent and now - recent[0][0] > 1:
+                    recent.popleft()
+                recent.append((now, raw))
+                cm = median(v for _, v in recent) if len(recent) == 3 else raw
+                return {'cm': cm, 'raw_cm': raw, 'near': cm <= self.config.near_cm}
             self._launch('distance', distance)
 
     def _launch(self, name, reader):

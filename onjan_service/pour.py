@@ -25,7 +25,8 @@ class Pour:
         if self.cancel.is_set() or self.stop.is_set():
             raise ValueError('정지 요청')
 
-    def stable(self, seconds=8, wait_for_cup=False):
+    def stable(self, seconds=8, wait_for_cup=False, auto_start=False):
+        span_limit, drift_limit = (2.5, 1.0) if auto_start else (2.0, .6)
         window = deque(maxlen=7)
         end = self.clock() + seconds if seconds is not None else float('inf')
         detail = '측정 표본 부족'
@@ -42,21 +43,25 @@ class Pour:
                 self.cancel.wait(.08)
                 continue
             stamp, g = self.sample()
-            if stamp != last:
+            fresh = stamp != last
+            if fresh:
                 window.append((stamp, g))
                 last = stamp
             detail = f'연속 표본 {len(window)}/7개'
             if len(window) == 7 and window[-1][0] - window[0][0] >= 2:
                 v = [x for _, x in window]
-                detail = f'무게 범위 {max(v)-min(v):.2f}g (허용 2g), 앞뒤 중앙값 차이 {abs(median(v[-3:])-median(v[:3])):.2f}g (허용 0.6g)'
-                if max(v)-min(v) <= 2 and abs(median(v[-3:])-median(v[:3])) <= .6:
+                span, drift = max(v)-min(v), abs(median(v[-3:])-median(v[:3]))
+                detail = f'무게 범위 {span:.2f}/{span_limit:g}g, 앞뒤 중앙값 차이 {drift:.2f}/{drift_limit:g}g'
+                if span <= span_limit and drift <= drift_limit:
                     return median(v)
+            if auto_start and fresh:
+                self.report('잔 안정화 대기 · ' + detail, None, g)
             self.cancel.wait(.08)
         raise ValueError(f'{seconds}초 내 안정화 실패: {detail}')
 
     def run(self, servo, absolute=False):
         # Session-local zero: do not change HX711 calibration or tare during flow.
-        baseline = self.stable(seconds=None) if absolute else self.stable(wait_for_cup=True)
+        baseline = self.stable(seconds=None, auto_start=True) if absolute else self.stable(wait_for_cup=True)
         target = TOTAL_G if absolute else baseline + DOSE_G
         origin = 0 if absolute else baseline
         if absolute and not 5 <= baseline < target:
