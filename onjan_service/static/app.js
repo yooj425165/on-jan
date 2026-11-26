@@ -39,7 +39,7 @@ async function poll() {
     pouring = ['pour_run','auto_run'].includes(state.job?.action) && state.job.status==='running';
     const pour=state.pour;
     pourReady=!state.auto_fill && armed && pca?.ok && !pca.stale && state.sensors.weight?.ok && !state.sensors.weight.stale && state.sensors.weight.data?.g!=null;
-    $('pour-refs').textContent=state.auto_fill ? `자동 주입 · ${state.auto_fill} · 목표 총무게 68g` : `목표 주입량: +${pour.dose_g} g`;
+    $('pour-refs').textContent=state.auto_fill ? `${state.cup_ready ? '🟢 잔을 올려주세요' : '🔴 새 잔을 올리지 마세요'} · ${state.auto_fill} · 목표 총무게 68g` : `목표 주입량: +${pour.dose_g} g`;
     $('pour-state').textContent=`${pour.phase || '대기'} ${pour.angles ? '· 명령 '+pour.angles.map(a=>Math.round(a)+'°').join(' / ') : ''} ${pour.grams!=null ? (state.auto_fill?'· 총무게 ':'· 순증가량 ')+pour.grams.toFixed(1)+' g' : ''}`;
     connected = true;
     running = state.phase === 'starting' || state.job?.status === 'running';
@@ -70,7 +70,7 @@ async function poll() {
     $('selection').textContent = sel ? `${sel.mood} · ${sel.reason} · ${sel.tracks.length}곡 ${sel.error || ''}` : '분위기를 측정하거나 직접 선택하세요.';
     $('diagnostics').textContent=JSON.stringify(state,null,2);
   } catch(error) {
-    connected=false;$('mic-level').value=-80;$('microphone').textContent='서버 연결 없음';$('connection').textContent='연결 끊김';
+    connected=false;$('pour-refs').textContent='연결 없음 · 잔을 올리지 마세요';$('mic-level').value=-80;$('microphone').textContent='서버 연결 없음';$('connection').textContent='연결 끊김';
     for (const name of ['light','weight','distance']) {$(name).textContent='—';$(`${name}-error`).textContent='서버 연결 없음';}
   } finally {buttons();setTimeout(poll,connected && running ? 120 : 1000);}
 }

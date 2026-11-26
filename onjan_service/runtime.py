@@ -20,7 +20,7 @@ AUTO_DISTANCE_CM = 16.0
 
 
 class Runtime:
-    def __init__(self, audio_device, hardware=True, microphone=None, motor_test=False, travel=None, auto_fill=False):
+    def __init__(self, audio_device, hardware=True, microphone=None, motor_test=False, travel=None, auto_fill=False, cup_leds=False):
         if travel not in (None, 180, 360):
             raise ValueError('travel: 180 또는 360')
         self.travel = travel
@@ -51,6 +51,11 @@ class Runtime:
         self.selection = None
         self.mic = {"status": "disabled" if not self.microphone else "waiting", "data": None}
         self.worker = threading.Thread(target=self._run, name="onjan-runtime")
+        self.cup_ready = False
+        self.lights = None
+        if cup_leds:
+            from .cup_led import CupLights
+            self.lights = CupLights()
 
     def start(self):
         self.worker.start()
@@ -95,9 +100,22 @@ class Runtime:
                                 self.selection['error'] = str(exc)
                     self.automation.update(grams, time.monotonic(), near)
                     self._auto_tick()
+                    self.cup_ready = bool(self.auto_phase == '잔 대기' and self.load_since is None
+                                          and not (self.job and self.job['status'] == 'running')
+                                          and grams is not None and abs(grams) <= 5
+                                          and snapshot['sensors']['weight']['age_s'] <= 2
+                                          and snapshot['sensors'].get('pca', {}).get('ok')
+                                          and not snapshot['sensors']['pca']['stale']
+                                          and self.hw.empty_platform_distance())
+                    if self.lights:
+                        self.lights.show(self.cup_ready)
         except Exception:
             LOG.exception("Runtime failed")
             self.phase = "error"
+        finally:
+            self.cup_ready = False
+            if self.lights:
+                self.lights.close()
 
     def snapshot(self):
         result = self.hw.snapshot()
@@ -105,6 +123,7 @@ class Runtime:
             result.update(phase=self.phase, job=copy.deepcopy(self.job),
                           pour=copy.deepcopy(self.pour_state),
                           auto_fill=self.auto_phase,
+                          cup_ready=self.cup_ready,
                           servo_control='manual_test' if self.motor_test else 'locked',
                           selection=copy.deepcopy(self.selection), moods=list(self.catalog["lists"]),
                           automation=self.automation.snapshot(), microphone=copy.deepcopy(self.mic))

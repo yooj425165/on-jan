@@ -16,13 +16,17 @@ def main(total=False):
     parser.add_argument("--microphone", help="ALSA capture device override")
     parser.add_argument("--confirm-external-power", action="store_true", help="외부 서보 전원 확인 후 수동 시험 허용")
     if total:
+        parser.add_argument('--cup-leds', action='store_true', help='Pi 4 잔 준비 LED: BCM17 초록 / BCM27 빨강')
         parser.add_argument('--auto-fill', action='store_true', help='빈 받침대 영점 후 잔 총무게 68g까지 자동 주입')
         parser.add_argument('--travel', type=int, choices=(180, 360), default=180,
                             help='위치 제어 서보의 실제 범위 (기본 180도)')
     args = parser.parse_args()
+    if getattr(args, 'cup_leds', False) and not args.auto_fill:
+        parser.error('--cup-leds requires --auto-fill')
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     runtime = Runtime(args.audio_device, not args.no_hardware, args.microphone,
-                      args.confirm_external_power, travel=getattr(args, 'travel', None), auto_fill=getattr(args, 'auto_fill', False))
+                      args.confirm_external_power, travel=getattr(args, 'travel', None), auto_fill=getattr(args, 'auto_fill', False),
+                      cup_leds=getattr(args, 'cup_leds', False))
 
     def terminate(signum, frame):
         raise KeyboardInterrupt
