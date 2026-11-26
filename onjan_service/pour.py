@@ -15,6 +15,10 @@ class TargetReached(Exception):
     pass
 
 
+class WaitForCup(Exception):
+    """Detection lost before the first motor command."""
+
+
 class Pour:
     def __init__(self, sample, report, stop, cup_issue, clock=time.monotonic):
         self.sample, self.report, self.stop, self.clock = sample, report, stop, clock
@@ -35,6 +39,8 @@ class Pour:
             self.check()
             issue = self.cup_issue()
             if issue:
+                if auto_start:
+                    raise WaitForCup(issue)
                 if not wait_for_cup:
                     raise ValueError(issue)
                 detail = issue
@@ -43,6 +49,8 @@ class Pour:
                 self.cancel.wait(.08)
                 continue
             stamp, g = self.sample()
+            if auto_start and g <= 5:
+                raise WaitForCup('하중 5g 초과 대기')
             fresh = stamp != last
             if fresh:
                 window.append((stamp, g))
@@ -72,10 +80,12 @@ class Pour:
         reason = '각도 한계까지 목표 미도달'
         trend = deque(maxlen=3)
 
-        def watch():
+        def watch(before_motion=False):
             self.check()
             issue = self.cup_issue()
             if issue:
+                if absolute and before_motion:
+                    raise WaitForCup(issue)
                 raise ValueError(issue)
             if self.clock() >= limit:
                 raise ValueError('90초 시간 제한')
@@ -140,7 +150,7 @@ class Pour:
 
         with servo.lock:
             try:
-                watch()
+                watch(before_motion=True)
             except TargetReached as exc:
                 raise ValueError('구동 전 이미 목표 도달') from exc
             try:

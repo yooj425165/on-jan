@@ -12,7 +12,7 @@ from onjan.config import Config, ROOT
 import math
 from .iio import IioHardware
 from .automation import Automation
-from .pour import CUP_MIN_CM, CUP_MAX_CM, DOSE_G, Pour
+from .pour import CUP_MIN_CM, CUP_MAX_CM, DOSE_G, Pour, WaitForCup
 from .microphone import capture
 
 LOG = logging.getLogger(__name__)
@@ -166,19 +166,21 @@ class Runtime:
             self.pool.submit(self._command, 'auto_run', {})
 
     def _command(self, action, data):
+        next_phase = '잔 제거 대기'
         try:
             result = self._perform(action, data)
-            with self.lock:
-                self.job.update(status="done", result=result)
+            outcome = dict(status='done', result=result)
+        except WaitForCup as exc:
+            next_phase = '잔 대기'
+            outcome = dict(status='done', result={'waiting': str(exc)})
         except Exception as exc:
             LOG.exception("Command %s failed", action)
-            with self.lock:
-                self.job.update(status="error", error=str(exc))
-        finally:
+            outcome = dict(status='error', error=str(exc))
+        with self.lock:
             if action == 'auto_run':
-                with self.lock:
-                    self.auto_phase = '잔 제거 대기'
-                    self.load_since = None
+                self.auto_phase = next_phase
+                self.load_since = None
+            self.job.update(**outcome)
 
     def _cup_issue(self):
         with self.hw.lock:
@@ -231,6 +233,9 @@ class Runtime:
             self._pour_report('빈 잔 안정화 대기', None, None)
             try:
                 return self.pour.run(self.hw.servos, absolute=action=='auto_run')
+            except WaitForCup as exc:
+                self._pour_report('잔 재감지 대기 · ' + str(exc), None, None)
+                raise
             except Exception as exc:
                 self._pour_report('로테이션 중단 · ' + str(exc), None, None)
                 raise
