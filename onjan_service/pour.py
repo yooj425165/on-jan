@@ -103,7 +103,13 @@ class Pour:
                     raise TargetReached(f'잔류 유입 예상 · {g-baseline:.1f}g에서 선복귀')
             return stamp, g
 
-        def move(to, duration, returning=False):
+        def rapid_flow():
+            if len(trend) < 2:
+                return False
+            (t0, g0), (t1, g1) = list(trend)[-2:]
+            return g1-g0 >= 1 and g1-g0 >= 2*(t1-t0)
+
+        def move(to, duration, returning=False, pause_on_flow=False):
             nonlocal angles
             start, t0 = angles, self.clock()
             while True:
@@ -111,6 +117,8 @@ class Pour:
                     raise ValueError('서버 종료')
                 if not returning:
                     watch()
+                    if pause_on_flow and rapid_flow():
+                        return
                 u = min(1, (self.clock()-t0)/duration)
                 k = u*u*(3-2*u)
                 angles = tuple(a+(b-a)*k for a,b in zip(start,to))
@@ -161,9 +169,9 @@ class Pour:
                     move((100,80), 2.7)
                     while True:
                         stamp, g = watch()
-                        if not flow and g >= baseline+1:
+                        if rapid_flow():
                             flow = True
-                            self.report('무게 증가 감지 · 현재 각도 유지', angles, g)
+                            self.report('급격한 무게 증가 · 현재 각도 유지', angles, g)
                         if flow:
                             # Require three fresh, flat readings after each stop before tilting again.
                             held = deque(maxlen=3)
@@ -180,7 +188,7 @@ class Pour:
                         to = (a,max(0,b-step)) if b else (max(0,a-step),0)
                         if flow:
                             self.report('저속 5도 이동', to, g)
-                            move(to, 1.0)
+                            move(to, 1.0, pause_on_flow=True)
                         else:
                             angles = to
                             servo.command_pair(angles)
