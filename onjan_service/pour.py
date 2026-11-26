@@ -157,31 +157,41 @@ class Pour:
                 self.check(); servo._enable(); servo.command_pair(angles)
                 self.report('시작 위치 · 총무게 감시' if absolute else '시작 위치 · 주입량 영점 설정', angles, baseline-origin)
                 if self.cancel.wait(.6): self.check()
-                step = 1 if absolute else 5
-                positions = [(100,b) for b in range(80,-1,-step)] + [(a,0) for a in range(100-step,-1,-step)]
-                for index,to in enumerate(positions):
-                    self.report('기울이는 중', to, None)
-                    if absolute and index:
-                        _, g = watch()
-                        while len(trend)==3 and g >= baseline+3 and trend[0][1] < trend[1][1] < g and g-trend[0][1] >= 1:
+                if absolute:
+                    move((100,80), 2.7)
+                    while True:
+                        stamp, g = watch()
+                        if not flow and g >= baseline+1:
                             flow = True
-                            self.report('현재 각도 유지 · 무게 증가 중', angles, g)
+                            self.report('무게 증가 감지 · 현재 각도 유지', angles, g)
+                        if flow:
+                            # Require three fresh, flat readings after each stop before tilting again.
+                            held = deque(maxlen=3)
+                            while len(held)<3 or max(held)-min(held)>.5:
+                                self.cancel.wait(.08)
+                                fresh, g = watch()
+                                if fresh != stamp:
+                                    held.append(g)
+                                    stamp = fresh
+                        a,b = angles
+                        if a == b == 0:
+                            break
+                        step = 5 if flow else 1
+                        to = (a,max(0,b-step)) if b else (max(0,a-step),0)
+                        if flow:
+                            self.report('저속 5도 이동', to, g)
+                            move(to, 1.0)
+                        else:
+                            angles = to
+                            servo.command_pair(angles)
                             self.cancel.wait(.1)
-                            _, g = watch()
-                        angles = to
-                        servo.command_pair(angles)
-                        self.cancel.wait(.1)
-                        watch()
-                        if index < len(positions)-1:
-                            continue
-                    else:
-                        move(to, (2.7 if absolute else 3.0) if index==0 else .16)
-                        if absolute:
-                            self.cancel.wait(.1)
-                            continue
-                    # If weight is already increasing, do not increase the pour rate.
-                    while observe(quick=index>0 and not flow):
-                        self.report('현재 각도 유지 · 무게 증가 중', angles, None)
+                else:
+                    positions = [(100,b) for b in range(80,-1,-5)] + [(a,0) for a in range(95,-1,-5)]
+                    for index,to in enumerate(positions):
+                        self.report('기울이는 중', to, None)
+                        move(to, 3.0 if index==0 else .16)
+                        while observe(quick=index>0 and not flow):
+                            self.report('현재 각도 유지 · 무게 증가 중', angles, None)
                 raise ValueError(reason)
             except TargetReached as exc:
                 reason=f'{exc} · 복귀 후 검증'
