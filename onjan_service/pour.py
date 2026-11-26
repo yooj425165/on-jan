@@ -192,7 +192,12 @@ class Pour:
                         else:
                             angles = to
                             servo.command_pair(angles)
-                            self.cancel.wait(.1)
+                            next_step = self.clock() + .3
+                            while self.clock() < next_step:
+                                watch()
+                                if rapid_flow():
+                                    break
+                                self.cancel.wait(max(0, min(.04, next_step-self.clock())))
                 else:
                     positions = [(100,b) for b in range(80,-1,-5)] + [(a,0) for a in range(95,-1,-5)]
                     for index,to in enumerate(positions):
