@@ -43,6 +43,7 @@ class Runtime:
         self.previous_track = None
         self.load_since = None
         if auto_fill:
+            self.hw.checking_empty = lambda: self.auto_phase == '빈 받침대 확인'
             self.hw.track_waiting = lambda: self.auto_phase == '잔 대기' and self.load_since is None
             self.hw.empty_limit_cm = AUTO_DISTANCE_CM
             self.hw.track_negative = lambda: self.auto_phase in ('잔 대기', '빈 받침대 확인', '잔 제거 대기') and self.load_since is None

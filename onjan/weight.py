@@ -15,6 +15,7 @@ class Weight:
         self.startup_zero = startup_zero
         self.empty_check = None
         self.track_negative = None
+        self.checking_empty = None
         self.track_waiting = None
         self.rezero = False
         self.window = deque()
@@ -59,6 +60,8 @@ class Weight:
                 drift = (self.offset is not None and self.track_negative and self.track_negative()
                          and (raw-self.offset)/self.factor <= -.5)
                 empty = self.empty_check is None or self.empty_check()
+                startup_drift = (self.offset is not None and self.checking_empty and self.checking_empty()
+                                 and 5 < (raw-self.offset)/self.factor <= 10)
                 if (empty and self.track_waiting and self.track_waiting() and self.offset is not None
                         and (raw-self.offset)/self.factor <= 5):
                     # Check for arrival against the previous zero before following empty drift.
@@ -66,7 +69,7 @@ class Weight:
                     self.previous = None
                     self.window.clear()
                 elif (empty and
-                        (self.offset is None or drift or
+                        (self.offset is None or drift or startup_drift or
                          (self.rezero and abs((raw-self.offset)/self.factor) <= 5))):
                     self._observe_zero(raw, time.monotonic())
                 else:
