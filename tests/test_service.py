@@ -122,6 +122,17 @@ class IntegrationTests(unittest.TestCase):
             runtime._music_round()
             self.assertEqual(play.call_count, 1)
 
+    def test_offline_playback_error_does_not_cancel_pour(self):
+        r = Runtime('default', offline=True, auto_fill=True, motor_test=True)
+        r.session_on = True
+        r.job = {'action': 'auto_run', 'status': 'running'}
+        with patch.object(r.hw.player, 'status', return_value={'error': 'ALSA disconnected'}) as status:
+            r._music_tick()
+            r._music_tick()
+        status.assert_called_once()
+        self.assertTrue(r.session_on)
+        self.assertFalse(r.pour.cancel.is_set())
+
 
 if __name__ == '__main__':
     unittest.main()

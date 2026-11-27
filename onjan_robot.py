@@ -12,7 +12,7 @@ def main():
     shutdown = threading.Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: shutdown.set())
-    runtime = Runtime(Config.audio_device, motor_test=True, travel=180, auto_fill=True)
+    runtime = Runtime(Config.audio_device, motor_test=True, travel=180, auto_fill=True, offline=True)
     runtime.start()
     try:
         while runtime.phase == 'starting' and not shutdown.wait(.1):

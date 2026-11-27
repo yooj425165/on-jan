@@ -22,7 +22,7 @@ AUTO_DISTANCE_CM = 16.0
 
 
 class Runtime:
-    def __init__(self, audio_device, hardware=True, microphone=None, motor_test=False, travel=None, auto_fill=False):
+    def __init__(self, audio_device, hardware=True, microphone=None, motor_test=False, travel=None, auto_fill=False, offline=False):
         if travel not in (None, 180, 360):
             raise ValueError('travel: 180 또는 360')
         self.travel = travel
@@ -34,6 +34,8 @@ class Runtime:
                                      servo_power_confirmed=self.motor_test, servo_travel_deg=travel or 180,
                                      servo_max_angle=travel or 180))
         self.hardware = hardware
+        self.offline = offline
+        self.music_retry_at = 0
         self.hw.config.intervals['light'] = .25
         self.session_on = False
         self.session_note = '시작 대기'
@@ -216,7 +218,10 @@ class Runtime:
             outcome = dict(status='error', error=str(exc))
         with self.lock:
             if action in ('music_round','auto_run') and self.session_on and outcome['status']=='error':
-                self._end_session(outcome['error'])
+                if self.offline and action == 'music_round':
+                    self._music_failed(outcome['error'])
+                else:
+                    self._end_session(outcome['error'])
             if action == 'auto_run':
                 self.auto_phase = next_phase
                 self.load_since = None
@@ -231,12 +236,21 @@ class Runtime:
         self.hw.player.stop()
         self.cup_ready = False
 
+    def _music_failed(self, reason):
+        self.hw.player.stop()  # Clear a finished player's latched ALSA error.
+        self.music_retry_at = time.monotonic() + 60
+        self.session_note = f'음악 오류 · 60초 후 재시도: {reason}'
+        LOG.warning('%s', self.session_note)
+
     def _music_tick(self):
-        if not self.session_on:
+        if not self.session_on or time.monotonic() < self.music_retry_at:
             return
         status = self.hw.player.status()
         if status['error']:
-            self._end_session('재생 오류: ' + status['error'])
+            if self.offline:
+                self._music_failed(status['error'])
+            else:
+                self._end_session('재생 오류: ' + status['error'])
         elif not status['playing'] and not (self.job and self.job['status']=='running'):
             self.session_note = '모터 정지 · 잔향 대기 / 환경 측정'
             self.job = dict(id=uuid.uuid4().hex, action='music_round', status='running', error=None)
