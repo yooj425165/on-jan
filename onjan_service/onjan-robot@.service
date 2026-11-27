@@ -1,13 +1,13 @@
 [Unit]
 Description=ONJAN offline robot (%i)
 After=local-fs.target sound.target
-RequiresMountsFor=/home/%i/on-jan-recovered
+RequiresMountsFor=/home/%i
 
 [Service]
 Type=simple
 User=%i
-WorkingDirectory=/home/%i/on-jan-recovered
-ExecStart=/home/%i/on-jan-recovered/.venv-pi/bin/python -u -m onjan_robot
+WorkingDirectory=/home/%i
+ExecStart=/home/%i/.venv-pi/bin/python -u -m onjan_robot
 Restart=no
 
 [Install]
