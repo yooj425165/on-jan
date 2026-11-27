@@ -244,12 +244,11 @@ class Runtime:
         except Exception as exc:
             LOG.exception("Command %s failed", action)
             outcome = dict(status='error', error=str(exc))
+            if action == 'auto_run' and not isinstance(exc, ValueError):
+                next_phase = '모터 오류 · 점검 필요'
         with self.lock:
-            if action in ('music_round','auto_run') and self.session_on and outcome['status']=='error':
-                if self.offline and action == 'music_round':
-                    self._music_failed(outcome['error'])
-                else:
-                    self._end_session(outcome['error'])
+            if action == 'music_round' and self.session_on and outcome['status']=='error':
+                self._music_failed(outcome['error'])
             if action == 'auto_run':
                 self.auto_phase = next_phase
                 self.load_since = None
@@ -275,10 +274,7 @@ class Runtime:
             return
         status = self.hw.player.status()
         if status['error']:
-            if self.offline:
-                self._music_failed(status['error'])
-            else:
-                self._end_session('재생 오류: ' + status['error'])
+            self._music_failed(status['error'])
         elif not status['playing'] and not (self.job and self.job['status']=='running'):
             self.session_note = '모터 정지 · 잔향 대기 / 환경 측정'
             self.job = dict(id=uuid.uuid4().hex, action='music_round', status='running', error=None)

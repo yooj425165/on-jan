@@ -7,6 +7,28 @@ from onjan_service.web import create_app
 
 
 class IntegrationTests(unittest.TestCase):
+    def test_post_pour_check_failure_leaves_song_playing_and_rearms(self):
+        r = Runtime('default', auto_fill=True, motor_test=True)
+        r.session_on = True
+        r.job = {'action':'auto_run', 'status':'running'}
+        r.hw.weight = Mock()
+        from threading import RLock
+        r.hw.weight.sensor.lock = RLock()
+        with patch.object(r, '_perform', side_effect=ValueError('최종 무게 미확인')), \
+                patch.object(r.hw.player, 'stop') as stop, patch.object(r.hw.player, 'play') as play, \
+                patch.object(r, '_weight_sample', return_value=(1, 0)), \
+                patch.object(r.hw, 'empty_platform_distance', return_value=True):
+            r._command('auto_run', {})
+            self.assertTrue(r.session_on)
+            self.assertEqual(r.auto_phase, '잔 제거 대기')
+            r._auto_tick()
+            self.assertTrue(r.hw.weight.rezero)
+            r.hw.weight.rezero = False
+            r._auto_tick()
+            self.assertEqual(r.auto_phase, '잔 대기')
+            stop.assert_not_called()
+            play.assert_not_called()
+
     def test_capture_failure_never_restarts_sensors(self):
         runtime = Runtime('default')
         runtime.hw = Mock()

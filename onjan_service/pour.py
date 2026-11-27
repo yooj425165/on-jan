@@ -212,7 +212,8 @@ class Pour:
                 reason=f'{exc} · 복귀 후 검증'
             except Exception as exc:
                 reason = f'모터 명령각 {angles[0]:.1f}° / {angles[1]:.1f}°에서 중단: {exc}'
-                raise ValueError(reason) from exc
+                error = ValueError if isinstance(exc, ValueError) else RuntimeError
+                raise error(reason) from exc
             finally:
                 try:
                     if servo.ready and not self.stop.is_set():
