@@ -45,10 +45,13 @@ class Player:
             self._stop()
             self.error = None
 
+    def track_files(self):
+        return {p.name: p for p in MUSIC_DIR.glob('*.wav') if p.is_file() and not p.is_symlink()}
+
     def play(self, name):
         import tempfile
         with self.lock:
-            files = {p.name: p for p in MUSIC_DIR.glob("*.wav") if p.is_file() and not p.is_symlink()}
+            files = self.track_files()
             if not isinstance(name, str) or name not in files:
                 raise ValueError("Choose a WAV file from the list.")
             if not shutil.which("aplay"):
