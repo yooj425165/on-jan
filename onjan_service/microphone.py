@@ -7,17 +7,17 @@ import tempfile
 import time
 
 
-def capture(device, rate=48000, on_level=None):
+def capture(device, rate=48000, on_level=None, seconds=2):
     import numpy as np
     # Fixed 2s bounded subprocess. INMP441 left slot, S32_LE stereo container.
     cmd = ["arecord", "-q", "-D", device, "-t", "raw", "-f", "S32_LE",
-           "-c", "2", "-r", str(rate), "-d", "2"]
+           "-c", "2", "-r", str(rate), "-d", str(seconds)]
     raw = bytearray()
     levels = []
     step = max(1, rate // 10) * 8
     end = step
     with tempfile.TemporaryFile() as errors, subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=errors) as proc:
-        deadline = time.monotonic() + 5
+        deadline = time.monotonic() + seconds + 3
         try:
             while True:
                 remaining = deadline - time.monotonic()
@@ -39,7 +39,7 @@ def capture(device, rate=48000, on_level=None):
         finally:
             if proc.poll() is None:
                 proc.kill()
-    if len(raw) != rate * 2 * 2 * 4:
+    if len(raw) != rate * seconds * 2 * 4:
         raise ValueError("마이크 샘플 길이 불일치: ALSA 형식/채널/샘플레이트 확인")
     samples = np.frombuffer(raw, dtype="<i4").reshape(-1, 2)[:, 0].astype(float) / 2**31
     peak = float(np.max(np.abs(samples)))

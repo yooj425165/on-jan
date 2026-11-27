@@ -2,6 +2,8 @@
 import copy
 import json
 import logging
+import random
+from statistics import median
 import subprocess
 import threading
 import time
@@ -32,6 +34,11 @@ class Runtime:
                                      servo_power_confirmed=self.motor_test, servo_travel_deg=travel or 180,
                                      servo_max_angle=travel or 180))
         self.hardware = hardware
+        self.hw.config.intervals['light'] = .25
+        self.session_on = False
+        self.session_note = '시작 대기'
+        self.session_cancel = threading.Event()
+        self.previous_track = None
         self.load_since = None
         if auto_fill:
             self.hw.track_waiting = lambda: self.auto_phase == '잔 대기' and self.load_since is None
@@ -100,7 +107,8 @@ class Runtime:
                                 self.selection['error'] = str(exc)
                     self.automation.update(grams, time.monotonic(), near)
                     self._auto_tick()
-                    self.cup_ready = bool(self.auto_phase == '잔 대기' and self.load_since is None
+                    self._music_tick()
+                    self.cup_ready = bool(self.session_on and self.auto_phase == '잔 대기' and self.load_since is None
                                           and not (self.job and self.job['status'] == 'running')
                                           and grams is not None and abs(grams) <= 5
                                           and snapshot['sensors']['weight']['age_s'] <= 2
@@ -112,6 +120,8 @@ class Runtime:
         except Exception:
             LOG.exception("Runtime failed")
             self.phase = "error"
+            with self.lock:
+                self._end_session('시스템 오류')
         finally:
             self.cup_ready = False
             if self.lights:
@@ -123,6 +133,7 @@ class Runtime:
             result.update(phase=self.phase, job=copy.deepcopy(self.job),
                           pour=copy.deepcopy(self.pour_state),
                           auto_fill=self.auto_phase,
+                          session={'on': self.session_on, 'note': self.session_note},
                           cup_ready=self.cup_ready,
                           servo_control='manual_test' if self.motor_test else 'locked',
                           selection=copy.deepcopy(self.selection), moods=list(self.catalog["lists"]),
@@ -131,10 +142,17 @@ class Runtime:
 
     def submit(self, action, data):
         allowed = {"measure", "choose", "play", "stop", "tare", "calibrate", "automation", "capture", "servo_probe", "servo_pulse", "servo_cycle"}
-        allowed.update(('pour_run','pour_cancel'))
+        allowed.update(('pour_run','pour_cancel','session_start','session_stop'))
         if action not in allowed:
             raise ValueError("지원하지 않는 명령")
         with self.lock:
+            if action == 'session_stop':
+                self._end_session('사용자 종료')
+                return uuid.uuid4().hex
+            if self.phase == 'error':
+                raise ValueError('시스템 오류: 서버를 재시작하세요.')
+            if self.session_on and action not in ('pour_cancel',):
+                raise ValueError('시스템 실행 중: 수동 작업 전 시스템을 종료하세요.')
             if action == 'pour_cancel':
                 if not self.job or self.job['action'] not in ('pour_run','auto_run') or self.job['status'] != 'running':
                     raise ValueError('진행 중인 로테이션 없음')
@@ -147,6 +165,15 @@ class Runtime:
             if self.job and self.job["status"] == "running":
                 raise ValueError("이전 명령 처리 중입니다. 완료 후 다시 요청하세요.")
             job_id = uuid.uuid4().hex
+            if action == 'session_start':
+                if not self.hardware:
+                    raise ValueError('하드웨어 모드가 필요합니다.')
+                self.queue.clear()
+                self.hw.player.stop()
+                self.session_cancel.clear()
+                self.session_on = True
+                self.session_note = '다음 곡 측정 대기'
+                return job_id
             if action.startswith('pour_'):
                 self.pour.cancel.clear()
             self.job = {"id": job_id, "action": action, "status": "running", "error": None}
@@ -154,7 +181,7 @@ class Runtime:
             return job_id
 
     def _auto_tick(self):
-        if not self.auto_phase or self.stop.is_set() or (self.job and self.job['status']=='running'):
+        if not self.session_on or not self.auto_phase or self.stop.is_set() or (self.job and self.job['status']=='running'):
             return
         try:
             stamp, g = self._weight_sample()
@@ -196,10 +223,71 @@ class Runtime:
             LOG.exception("Command %s failed", action)
             outcome = dict(status='error', error=str(exc))
         with self.lock:
+            if action in ('music_round','auto_run') and self.session_on and outcome['status']=='error':
+                self._end_session(outcome['error'])
             if action == 'auto_run':
                 self.auto_phase = next_phase
                 self.load_since = None
             self.job.update(**outcome)
+
+    def _end_session(self, reason):
+        self.session_on = False
+        self.session_note = reason
+        self.session_cancel.set()
+        self.pour.cancel.set()
+        self.queue.clear()
+        self.hw.player.stop()
+        self.cup_ready = False
+
+    def _music_tick(self):
+        if not self.session_on:
+            return
+        status = self.hw.player.status()
+        if status['error']:
+            self._end_session('재생 오류: ' + status['error'])
+        elif not status['playing'] and not (self.job and self.job['status']=='running'):
+            self.session_note = '모터 정지 · 잔향 대기 / 환경 측정'
+            self.job = dict(id=uuid.uuid4().hex, action='music_round', status='running', error=None)
+            self.pool.submit(self._command, 'music_round', {})
+
+    def _music_round(self):
+        if self.session_cancel.wait(1):
+            return
+        try:
+            sound = capture(self.microphone, seconds=3)
+            rms = sound['rms_dbfs']
+            start = time.time()
+            deadline = time.monotonic()+1
+            samples = {}
+            while time.monotonic() < deadline:
+                if self.session_cancel.wait(.05):
+                    return
+                with self.hw.lock:
+                    light = self.hw.state.get('light', {})
+                    if light.get('ok') and light['updated_at'] >= start:
+                        samples[light['updated_at']] = light['data']['lux']
+            if len(samples)<2 or not all(math.isfinite(x) and x>=0 for x in samples.values()) or not math.isfinite(rms) or rms>0:
+                raise ValueError('조도 표본 부족 또는 센서값 오류')
+            lux = median(samples.values())
+            mood = self.catalog['quadrants'][2*int(lux>=self.catalog['bright_lux']) + int(rms>=self.catalog['active_dbfs'])]
+            reason = f'{lux:.1f} lux · {rms:.1f} dBFS'
+        except (OSError, ValueError, RuntimeError, ImportError) as exc:
+            LOG.warning('환경 측정 실패: %s', exc)
+            mood = self.catalog['quadrants'][0]
+            reason = f'센서 오류 · 기본 분위기: {exc}'
+        files = set(self.hw.snapshot()['tracks'])
+        candidates = [f for f in self.catalog['lists'][mood] if f in files]
+        if not candidates:
+            raise ValueError(f'{mood}: 재생 가능한 WAV 없음')
+        track = random.choice([f for f in candidates if f!=self.previous_track] or candidates)
+        with self.lock:
+            if not self.session_on or self.session_cancel.is_set() or self.stop.is_set():
+                return
+            self.hw.player.play(track)
+            self.previous_track = track
+            self.session_note = '재생 중 · '+track
+            self.selection = dict(mood=mood, reason=reason, tracks=[track])
+            return self.selection.copy()
 
     def _cup_issue(self):
         with self.hw.lock:
@@ -245,6 +333,8 @@ class Runtime:
             self.pour_state.update(phase=phase, angles=angles, grams=grams)
 
     def _perform(self, action, data):
+        if action == 'music_round':
+            return self._music_round()
         if action in ('pour_run','auto_run'):
             if not self.motor_test or not self.hw.servos:
                 raise ValueError('외부 전원 확인 및 PCA9685 연결 필요')
@@ -373,6 +463,8 @@ class Runtime:
 
     def close(self):
         self.stop.set()
+        with self.lock:
+            self._end_session('서버 종료')
         self.worker.join()
         self.pool.shutdown(wait=True, cancel_futures=True)
         self.hw.close()

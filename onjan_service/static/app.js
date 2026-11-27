@@ -1,9 +1,10 @@
 const $ = id => document.getElementById(id);
 let sending = false, running = false, connected = false;
+let sessionOn = false;
 let micEnabled = false, pouring = false, pourReady = false;
-function buttons() {document.querySelectorAll('button').forEach(b => b.disabled = b.id === 'pour-cancel' ? !connected || !pouring : sending || running || !connected || (!pourReady && b.dataset.action==='pour_run') || (!micEnabled && b.matches('[data-action="measure"]')));}
+function buttons() {document.querySelectorAll('button').forEach(b => b.disabled = b.dataset.action === 'session_stop' ? !connected || !sessionOn : b.id === 'pour-cancel' ? !connected || !pouring : sessionOn || sending || running || !connected || (!pourReady && b.dataset.action==='pour_run') || (!micEnabled && b.matches('[data-action="measure"]')));}
 async function command(action, data={}) {
-  if ((sending || running) && action !== 'pour_cancel') return;
+  if ((sending || running) && !['pour_cancel','session_stop'].includes(action)) return;
   sending = true; buttons();
   try {
     const response = await fetch(`/api/commands/${action}`, {method:'POST', headers:{'Content-Type':'application/json','X-Onjan-Token':token}, body:JSON.stringify(data)});
@@ -28,6 +29,8 @@ async function poll() {
     const response = await fetch('/api/status',{signal:AbortSignal.timeout(5000)});
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const state = await response.json();
+    sessionOn = state.session.on;
+    $('session-note').textContent = state.session.note;
     const pca = state.sensors.pca;
     const armed = state.servo_control === 'manual_test';
     $('servo-controls').disabled = !(armed && pca?.ok && !pca.stale);

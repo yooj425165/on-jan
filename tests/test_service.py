@@ -107,6 +107,21 @@ class IntegrationTests(unittest.TestCase):
                 result = runtime._perform('measure', {})
                 self.assertEqual(result['mood'], runtime.catalog['quadrants'][i])
 
+    def test_session_fallback_avoids_previous_and_stop_blocks_replay(self):
+        runtime = Runtime('default')
+        runtime.session_on = True
+        tracks = runtime.catalog['lists'][runtime.catalog['quadrants'][0]][:2]
+        runtime.previous_track = tracks[0]
+        with patch.object(runtime.session_cancel, 'wait', return_value=False), \
+                patch('onjan_service.runtime.capture', side_effect=ValueError('silent')), \
+                patch.object(runtime.hw, 'snapshot', return_value={'tracks': tracks}), \
+                patch.object(runtime.hw.player, 'play') as play:
+            runtime._music_round()
+            play.assert_called_once_with(tracks[1])
+            runtime.submit('session_stop', {})
+            runtime._music_round()
+            self.assertEqual(play.call_count, 1)
+
 
 if __name__ == '__main__':
     unittest.main()
