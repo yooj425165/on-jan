@@ -184,7 +184,6 @@ class Pour:
                             flow = True
                             self.report('급격한 무게 증가 · 현재 각도 유지', angles, g)
                         if flow:
-                            # Require three fresh, flat readings after each stop before tilting again.
                             held = deque(maxlen=3)
                             while len(held)<3 or max(held)-min(held)>.5:
                                 self.cancel.wait(.08)
