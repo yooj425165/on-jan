@@ -79,3 +79,11 @@ class PourTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '80g 미만'):
             p.run(servo, absolute=True)
         servo._enable.assert_not_called()
+
+    def test_pickup_after_return_is_not_a_session_error(self):
+        servo = Mock(ready=True, lock=threading.Lock())
+        p = self.setup_pour(None, lambda t: 0 if servo.disable.called else min(80,45+max(0,t-10)*4))
+        p.cup_issue = lambda: '잔 없음' if servo.disable.called else None
+        result = p.run(servo, absolute=True, pickup_check=lambda: servo.disable.called)
+        self.assertIsNone(result['total_g'])
+        self.assertIn('잔 수거', result['reason'])

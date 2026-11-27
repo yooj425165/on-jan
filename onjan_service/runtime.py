@@ -333,7 +333,8 @@ class Runtime:
             self.valid_data(self.hw.snapshot(),'pca')
             self._pour_report('빈 잔 안정화 대기', None, None)
             try:
-                return self.pour.run(self.hw.servos, absolute=action=='auto_run')
+                return self.pour.run(self.hw.servos, absolute=action=='auto_run',
+                                     pickup_check=self.hw.empty_platform_distance)
             except WaitForCup as exc:
                 self._pour_report('잔 재감지 대기 · ' + str(exc), None, None)
                 raise

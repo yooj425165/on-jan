@@ -29,7 +29,7 @@ class Pour:
         if self.cancel.is_set() or self.stop.is_set():
             raise ValueError('정지 요청')
 
-    def stable(self, seconds=8, wait_for_cup=False, auto_start=False):
+    def stable(self, seconds=8, wait_for_cup=False, auto_start=False, pickup_check=None):
         span_limit, drift_limit = (2.5, 1.0) if auto_start else (2.0, .6)
         window = deque(maxlen=7)
         end = self.clock() + seconds if seconds is not None else float('inf')
@@ -37,6 +37,8 @@ class Pour:
         last = None
         while self.clock() < end:
             self.check()
+            if pickup_check is not None and pickup_check() and abs(self.sample()[1]) <= 5:
+                return None
             issue = self.cup_issue()
             if issue:
                 if auto_start:
@@ -67,7 +69,7 @@ class Pour:
             self.cancel.wait(.08)
         raise ValueError(f'{seconds}초 내 안정화 실패: {detail}')
 
-    def run(self, servo, absolute=False):
+    def run(self, servo, absolute=False, pickup_check=None):
         # Session-local zero: do not change HX711 calibration or tare during flow.
         baseline = self.stable(seconds=None, auto_start=True) if absolute else self.stable(wait_for_cup=True)
         target = TOTAL_G if absolute else baseline + DOSE_G
@@ -223,7 +225,13 @@ class Pour:
                         servo.disable()
                     except Exception as exc:
                         raise RuntimeError(f'{reason} · PWM 해제 실패: {exc}') from exc
-        final = self.stable() - origin
+        final = self.stable(wait_for_cup=bool(absolute and pickup_check),
+                            pickup_check=pickup_check if absolute else None)
+        if final is None:
+            reason = '복귀 후 잔 수거 · 최종 무게 미확인'
+            self.report(reason, (180,180), None)
+            return {'reason':reason, 'flow_detected':flow, 'total_g':None}
+        final -= origin
         if final < target-origin-REFERENCE_TOLERANCE_G:
             raise ValueError(f'복귀 후 {final:.1f}g: 순간 피크로 종료, 목표 도달 미확인')
         if final > target-origin+REFERENCE_TOLERANCE_G:
