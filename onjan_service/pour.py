@@ -177,7 +177,7 @@ class Pour:
                 self.report('시작 위치 · 총무게 감시' if absolute else '시작 위치 · 주입량 영점 설정', angles, baseline-origin)
                 if self.cancel.wait(.6): self.check()
                 if absolute:
-                    move((100,80), 2.7)
+                    move((100,70), 2.7)
                     while True:
                         stamp, g = watch()
                         if rapid_flow():
