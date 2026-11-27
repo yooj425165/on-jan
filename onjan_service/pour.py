@@ -7,7 +7,7 @@ import time
 DOSE_G = 25.0
 CUP_MIN_CM = 2.0
 CUP_MAX_CM = 13.0
-TOTAL_G = 80.0
+TOTAL_G = 75.0
 REFERENCE_TOLERANCE_G = 5.0
 
 
