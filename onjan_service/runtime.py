@@ -61,6 +61,7 @@ class Runtime:
         self.mic = {"status": "disabled" if not self.microphone else "waiting", "data": None}
         self.worker = threading.Thread(target=self._run, name="onjan-runtime")
         self.cup_ready = False
+        self.cup_blocker = '초기화 중'
 
     def start(self):
         self.worker.start()
@@ -106,13 +107,8 @@ class Runtime:
                     self.automation.update(grams, time.monotonic(), near)
                     self._auto_tick()
                     self._music_tick()
-                    self.cup_ready = bool(self.session_on and self.auto_phase == '잔 대기' and self.load_since is None
-                                          and not (self.job and self.job['status'] == 'running')
-                                          and grams is not None and abs(grams) <= 5
-                                          and snapshot['sensors']['weight']['age_s'] <= 2
-                                          and snapshot['sensors'].get('pca', {}).get('ok')
-                                          and not snapshot['sensors']['pca']['stale']
-                                          and self.hw.empty_platform_distance())
+                    self.cup_blocker = self._placement_blocker(snapshot['sensors'], grams)
+                    self.cup_ready = self.cup_blocker is None
         except Exception:
             LOG.exception("Runtime failed")
             self.phase = "error"
@@ -120,6 +116,36 @@ class Runtime:
                 self._end_session('시스템 오류')
         finally:
             self.cup_ready = False
+            self.cup_blocker = '시스템 정지'
+
+    def _placement_blocker(self, sensors, grams):
+        if not self.session_on:
+            return self.session_note
+        if not self.auto_phase:
+            return '자동 주입 비활성'
+        if self.auto_phase not in ('빈 받침대 확인', '잔 대기'):
+            return self.auto_phase
+        weight = sensors.get('weight', {})
+        if not weight.get('ok') or weight.get('age_s', 99) > 2:
+            return weight.get('error') or '로드셀 최신값 대기'
+        if not weight['data'].get('counts_per_g'):
+            return '로드셀 보정값 없음 · /weight에서 무게추로 보정'
+        if not self.hw.empty_platform_distance():
+            d = sensors.get('distance', {})
+            cm = (d.get('data') or {}).get('cm')
+            if d.get('ok') and d.get('age_s', 99) <= 1 and cm is not None:
+                return f'빈 받침대 거리 {cm:.1f}cm · {AUTO_DISTANCE_CM:g}cm 초과 필요'
+            return d.get('error') or '초음파 최신값 대기'
+        if grams is None or self.auto_phase == '빈 받침대 확인':
+            return '빈 받침대 영점 확인 중'
+        if self.load_since is not None or abs(grams) > 5:
+            return f'빈 받침대 무게 {grams:.1f}g · ±5g 이내 필요'
+        pca = sensors.get('pca', {})
+        if not pca.get('ok') or pca.get('stale'):
+            return pca.get('error') or '서보 제어기 응답 대기'
+        if self.job and self.job['status'] == 'running':
+            return '선곡 측정 중' if self.job['action']=='music_round' else '작업 진행 중'
+        return None
 
     def snapshot(self):
         result = self.hw.snapshot()
@@ -129,6 +155,7 @@ class Runtime:
                           auto_fill=self.auto_phase,
                           session={'on': self.session_on, 'note': self.session_note},
                           cup_ready=self.cup_ready,
+                          cup_blocker=self.cup_blocker,
                           servo_control='manual_test' if self.motor_test else 'locked',
                           selection=copy.deepcopy(self.selection), moods=list(self.catalog["lists"]),
                           automation=self.automation.snapshot(), microphone=copy.deepcopy(self.mic))
