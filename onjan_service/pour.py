@@ -99,8 +99,8 @@ class Pour:
                 trend.append((stamp, g))
             if len(trend) >= 2:
                 drop = (trend[-2][1] + trend[-1][1]) / 2 - baseline
-                if drop < -3:
-                    raise ValueError(f'최근 2개 평균: 시작 대비 {drop:+.2f}g (중단 기준 −3g 미만)')
+                if drop <= -5:
+                    raise ValueError(f'최근 2개 평균: 시작 대비 {drop:+.2f}g (중단 기준 −5g 이하)')
             if not absolute and len(trend) == 3 and g >= target-4:
                 (t0, a), (_, b), (t1, c) = trend
                 if a < b < c and .3 <= t1-t0 <= 3 and g + (c-a)/(t1-t0)*1.5 >= target:
