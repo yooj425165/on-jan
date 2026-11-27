@@ -160,7 +160,7 @@ class Runtime:
                           cup_blocker=self.cup_blocker,
                           full_target_g=self.full_target,
                           servo_control='manual_test' if self.motor_test else 'locked',
-                          selection=copy.deepcopy(self.selection), moods=list(self.catalog["lists"]),
+                          selection=copy.deepcopy(self.selection), moods=list(self.catalog["lists"]), genres=self.catalog["genres"],
                           automation=self.automation.snapshot(), microphone=copy.deepcopy(self.mic))
         return result
 
@@ -284,6 +284,11 @@ class Runtime:
             self.job = dict(id=uuid.uuid4().hex, action='music_round', status='running', error=None)
             self.pool.submit(self._command, 'music_round', {})
 
+    def _mood_for(self, lux, rms):
+        row = sum(rms >= t for t in self.catalog['dbfs_thresholds'])
+        col = sum(lux >= t for t in self.catalog['lux_thresholds'])
+        return self.catalog['mood_grid'][row][col]
+
     def _music_round(self):
         if self.session_cancel.wait(1):
             return
@@ -303,11 +308,11 @@ class Runtime:
             if len(samples)<2 or not all(math.isfinite(x) and x>=0 for x in samples.values()) or not math.isfinite(rms) or rms>0:
                 raise ValueError('조도 표본 부족 또는 센서값 오류')
             lux = median(samples.values())
-            mood = self.catalog['quadrants'][2*int(lux>=self.catalog['bright_lux']) + int(rms>=self.catalog['active_dbfs'])]
+            mood = self._mood_for(lux, rms)
             reason = f'{lux:.1f} lux · {rms:.1f} dBFS'
         except (OSError, ValueError, RuntimeError, ImportError) as exc:
             LOG.warning('환경 측정 실패: %s', exc)
-            mood = self.catalog['quadrants'][0]
+            mood = self.catalog['mood_grid'][0][0]
             reason = f'센서 오류 · 기본 분위기: {exc}'
         files = set(self.hw.snapshot()['tracks'])
         candidates = [f for f in self.catalog['lists'][mood] if f in files]
@@ -430,10 +435,8 @@ class Runtime:
                         raise ValueError('센서값 범위 오류')
                 except Exception as exc:
                     raise ValueError(f'{exc} · 분위기를 직접 선택하세요.') from exc
-                bright = lux >= self.catalog['bright_lux']
-                loud = rms >= self.catalog['active_dbfs']
-                mood = self.catalog['quadrants'][int(bright)*2 + int(loud)]
-                reason = f"{lux:.1f} lux ({'밝음' if bright else '어두움'}), {rms:.1f} dBFS ({'활기참' if loud else '조용함'})"
+                mood = self._mood_for(lux, rms)
+                reason = f'{lux:.1f} lux · {rms:.1f} dBFS'
             else:
                 mood = data.get('mood')
                 reason = '직접 선택'

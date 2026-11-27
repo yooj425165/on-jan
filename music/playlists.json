@@ -1,15 +1,38 @@
 {
-  "bright_lux": 150,
-  "active_dbfs": -45,
-  "quadrants": [
-    "고요한 한 잔",
-    "늦은 밤의 재즈바",
-    "해 질 녘의 어쿠스틱",
-    "기분 올리는 밤"
+  "lux_thresholds": [
+    100,
+    300
   ],
+  "dbfs_thresholds": [
+    -50,
+    -35
+  ],
+  "mood_grid": [
+    [
+      "고요함",
+      "아늑함",
+      "산뜻함"
+    ],
+    [
+      "사색적",
+      "아늑함",
+      "활기참"
+    ],
+    [
+      "고요함",
+      "고요함",
+      "산뜻함"
+    ]
+  ],
+  "genres": {
+    "고요함": "잔잔한 피아노, 앰비언트",
+    "아늑함": "스무스 재즈, 로파이",
+    "사색적": "네오클래식, 첼로",
+    "산뜻함": "보사노바, 어쿠스틱 기타",
+    "활기참": "업비트 재즈, 스윙"
+  },
   "lists": {
-    "고요한 한 잔": [
-      "bach_aria.wav",
+    "고요함": [
       "doc_lena_selyanina__an_die_romanze.wav",
       "doc_lena_selyanina__der_leiermann.wav",
       "martin_och_johanna__mellan.wav",
@@ -19,7 +42,7 @@
       "martin_och_johanna__mellanfolklig.wav",
       "martin_och_johanna__mellanlanda.wav"
     ],
-    "늦은 밤의 재즈바": [
+    "아늑함": [
       "doc_lena_selyanina__vienna_blue.wav",
       "doc_lena_selyanina__naughty_waltz.wav",
       "blunderwood__geo_sync_deluxe.wav",
@@ -28,8 +51,11 @@
       "blunderwood__mir.wav",
       "blunderwood__salyut.wav"
     ],
-    "해 질 녘의 어쿠스틱": [
-      "bach_gavotte.wav",
+    "사색적": [
+      "bach_aria.wav",
+      "bach_gavotte.wav"
+    ],
+    "산뜻함": [
       "mckell_ross_and_gill__alright.wav",
       "mckell_ross_and_gill__four_leaf_clover.wav",
       "mckell_ross_and_gill__summer_s_gone.wav",
@@ -37,7 +63,7 @@
       "mckell_ross_and_gill__smile.wav",
       "mckell_ross_and_gill__remember.wav"
     ],
-    "기분 올리는 밤": [
+    "활기참": [
       "marc_burt__twenty_ten.wav",
       "marc_burt__miles.wav",
       "redmann__plasma_original_mix.wav",

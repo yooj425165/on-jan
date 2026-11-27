@@ -119,20 +119,20 @@ class IntegrationTests(unittest.TestCase):
             runtime._perform('stop', {})
             self.assertFalse(runtime.queue)
 
-    def test_sensor_quadrants(self):
+    def test_sensor_grid(self):
         runtime = Runtime('default')
         runtime._capture_round = Mock()
-        for i, (lux, rms) in enumerate([(149,-46),(149,-45),(150,-46),(150,-45)]):
-            runtime._capture_round.return_value = {'rms_dbfs': rms}
-            runtime.hw.state['light'] = {'data': {'lux': lux}, 'ok': True, 'updated_at': __import__('time').time()}
-            with patch.object(runtime.hw.player, 'play'):
-                result = runtime._perform('measure', {})
-                self.assertEqual(result['mood'], runtime.catalog['quadrants'][i])
+        for rms, expected in [(-51, ('고요함','아늑함','산뜻함')), (-50, ('사색적','아늑함','활기참')), (-35, ('고요함','고요함','산뜻함'))]:
+            for lux, mood in zip((99,100,300), expected):
+                runtime._capture_round.return_value = {'rms_dbfs': rms}
+                runtime.hw.state['light'] = {'data': {'lux': lux}, 'ok': True, 'updated_at': __import__('time').time()}
+                with patch.object(runtime.hw.player, 'play'):
+                    self.assertEqual(runtime._perform('measure', {})['mood'], mood)
 
     def test_session_fallback_avoids_previous_and_stop_blocks_replay(self):
         runtime = Runtime('default')
         runtime.session_on = True
-        tracks = runtime.catalog['lists'][runtime.catalog['quadrants'][0]][:2]
+        tracks = runtime.catalog['lists']['고요함'][:2]
         runtime.previous_track = tracks[0]
         with patch.object(runtime.session_cancel, 'wait', return_value=False), \
                 patch('onjan_service.runtime.capture', side_effect=ValueError('silent')), \

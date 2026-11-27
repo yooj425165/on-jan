@@ -68,7 +68,7 @@ async function poll() {
     const labels={disabled:'감지 꺼짐',wait_removal:'컵 제거 대기',waiting:'컵 올리기 대기',moving:'이동 중 (시뮬레이션)',holding:'위치 유지 (시뮬레이션)',returning:'복귀 중 (시뮬레이션)',sensor_unavailable:'무게 센서 오류 / 최신값 없음'};
     $('automation').textContent = `${labels[state.automation.state]} · 완료 ${state.automation.cycles}회`;
     if (state.job) $('message').textContent = `${state.job.action} · ${state.job.status}${state.job.error ? ': '+state.job.error : ''}`;
-    if (!$('mood').options.length) $('mood').replaceChildren(...state.moods.map(m=>new Option(m,m)));
+    if (!$('mood').options.length) $('mood').replaceChildren(...state.moods.map(m=>new Option(`${m} · ${state.genres[m]}`,m)));
     const sel = state.selection;
     $('selection').textContent = sel ? `${sel.mood} · ${sel.reason} · ${sel.tracks.length}곡 ${sel.error || ''}` : '분위기를 측정하거나 직접 선택하세요.';
     $('diagnostics').textContent=JSON.stringify(state,null,2);
