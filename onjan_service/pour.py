@@ -195,7 +195,7 @@ class Pour:
                         a,b = angles
                         if a == b == 0:
                             break
-                        step = 5 if flow else 2
+                        step = 5 if flow else 1
                         to = (a,max(0,b-step)) if b else (max(0,a-step),0)
                         if flow:
                             self.report('저속 5도 이동', to, g)
@@ -203,7 +203,7 @@ class Pour:
                         else:
                             angles = to
                             servo.command_pair(angles)
-                            next_step = self.clock() + .1
+                            next_step = self.clock() + .3
                             while self.clock() < next_step:
                                 watch()
                                 if rapid_flow():
