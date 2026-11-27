@@ -7,7 +7,7 @@ import time
 DOSE_G = 25.0
 CUP_MIN_CM = 2.0
 CUP_MAX_CM = 13.0
-TOTAL_G = 70.0
+SESSION_FILL_G = 42.0
 REFERENCE_TOLERANCE_G = 5.0
 
 
@@ -30,7 +30,7 @@ class Pour:
             raise ValueError('정지 요청')
 
     def stable(self, seconds=8, wait_for_cup=False, auto_start=False, pickup_check=None):
-        span_limit, drift_limit = (2.5, 1.0) if auto_start else (2.0, .6)
+        span_limit, drift_limit = (2.0, .8) if auto_start else (2.0, .6)
         window = deque(maxlen=7)
         end = self.clock() + seconds if seconds is not None else float('inf')
         detail = '측정 표본 부족'
@@ -69,13 +69,11 @@ class Pour:
             self.cancel.wait(.08)
         raise ValueError(f'{seconds}초 내 안정화 실패: {detail}')
 
-    def run(self, servo, absolute=False, pickup_check=None):
+    def run(self, servo, absolute=False, pickup_check=None, session_target=None):
         # Session-local zero: do not change HX711 calibration or tare during flow.
         baseline = self.stable(seconds=None, auto_start=True) if absolute else self.stable(wait_for_cup=True)
-        target = TOTAL_G if absolute else baseline + DOSE_G
+        target = None if absolute else baseline + DOSE_G
         origin = 0 if absolute else baseline
-        if absolute and not 5 <= baseline < target:
-            raise ValueError(f'시작 무게 {baseline:.1f}g: 5g 이상, {target:g}g 미만 필요')
         limit = self.clock()+90
         angles = (180,180)
         flow = False
@@ -161,6 +159,15 @@ class Pour:
             raise ValueError(f'4초 내 새 무게 표본 {len(values)}/5개')
 
         with servo.lock:
+            if absolute:
+                self.check()
+                issue = self.cup_issue()
+                if issue:
+                    raise WaitForCup(issue)
+                target = session_target(baseline)
+                if baseline >= target:
+                    self.report('이미 목표 도달 · 주입 생략', None, baseline)
+                    return {'reason':'이미 목표 도달', 'total_g':baseline}
             try:
                 watch(before_motion=True)
             except TargetReached as exc:

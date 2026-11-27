@@ -14,7 +14,7 @@ from onjan.config import Config, ROOT
 import math
 from .iio import IioHardware
 from .automation import Automation
-from .pour import CUP_MIN_CM, CUP_MAX_CM, DOSE_G, Pour, WaitForCup
+from .pour import CUP_MIN_CM, CUP_MAX_CM, DOSE_G, SESSION_FILL_G, Pour, WaitForCup
 from .microphone import capture
 
 LOG = logging.getLogger(__name__)
@@ -38,6 +38,7 @@ class Runtime:
         self.music_retry_at = 0
         self.hw.config.intervals['light'] = .25
         self.session_on = False
+        self.full_target = None
         self.session_note = '시작 대기'
         self.session_cancel = threading.Event()
         self.previous_track = None
@@ -157,6 +158,7 @@ class Runtime:
                           session={'on': self.session_on, 'note': self.session_note},
                           cup_ready=self.cup_ready,
                           cup_blocker=self.cup_blocker,
+                          full_target_g=self.full_target,
                           servo_control='manual_test' if self.motor_test else 'locked',
                           selection=copy.deepcopy(self.selection), moods=list(self.catalog["lists"]),
                           automation=self.automation.snapshot(), microphone=copy.deepcopy(self.mic))
@@ -194,6 +196,7 @@ class Runtime:
                 self.hw.player.stop()
                 self.session_cancel.clear()
                 self.session_on = True
+                self.full_target = None
                 self.session_note = '다음 곡 측정 대기'
                 return job_id
             if action.startswith('pour_'):
@@ -256,6 +259,7 @@ class Runtime:
 
     def _end_session(self, reason):
         self.session_on = False
+        self.full_target = None
         self.session_note = reason
         self.session_cancel.set()
         self.pour.cancel.set()
@@ -362,6 +366,14 @@ class Runtime:
         with self.lock:
             self.pour_state.update(phase=phase, angles=angles, grams=grams)
 
+    def _session_target(self, baseline):
+        with self.lock:
+            if not self.session_on or self.pour.cancel.is_set():
+                raise ValueError('세션 종료 또는 중단')
+            if self.full_target is None:
+                self.full_target = baseline + SESSION_FILL_G
+            return self.full_target
+
     def _perform(self, action, data):
         if action == 'music_round':
             return self._music_round()
@@ -372,7 +384,7 @@ class Runtime:
             self._pour_report('빈 잔 안정화 대기', None, None)
             try:
                 return self.pour.run(self.hw.servos, absolute=action=='auto_run',
-                                     pickup_check=self.hw.empty_platform_distance)
+                                     pickup_check=self.hw.empty_platform_distance, session_target=self._session_target)
             except WaitForCup as exc:
                 self._pour_report('잔 재감지 대기 · ' + str(exc), None, None)
                 raise
