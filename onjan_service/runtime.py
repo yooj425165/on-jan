@@ -22,7 +22,7 @@ AUTO_DISTANCE_CM = 16.0
 
 
 class Runtime:
-    def __init__(self, audio_device, hardware=True, microphone=None, motor_test=False, travel=None, auto_fill=False, cup_leds=False):
+    def __init__(self, audio_device, hardware=True, microphone=None, motor_test=False, travel=None, auto_fill=False):
         if travel not in (None, 180, 360):
             raise ValueError('travel: 180 또는 360')
         self.travel = travel
@@ -59,10 +59,6 @@ class Runtime:
         self.mic = {"status": "disabled" if not self.microphone else "waiting", "data": None}
         self.worker = threading.Thread(target=self._run, name="onjan-runtime")
         self.cup_ready = False
-        self.lights = None
-        if cup_leds:
-            from .cup_led import CupLights
-            self.lights = CupLights()
 
     def start(self):
         self.worker.start()
@@ -115,8 +111,6 @@ class Runtime:
                                           and snapshot['sensors'].get('pca', {}).get('ok')
                                           and not snapshot['sensors']['pca']['stale']
                                           and self.hw.empty_platform_distance())
-                    if self.lights:
-                        self.lights.show(self.cup_ready)
         except Exception:
             LOG.exception("Runtime failed")
             self.phase = "error"
@@ -124,8 +118,6 @@ class Runtime:
                 self._end_session('시스템 오류')
         finally:
             self.cup_ready = False
-            if self.lights:
-                self.lights.close()
 
     def snapshot(self):
         result = self.hw.snapshot()
