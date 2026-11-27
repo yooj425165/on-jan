@@ -3,12 +3,15 @@ import logging
 import signal
 import threading
 
-from onjan.config import Config
+from onjan.config import Config, ROOT
+from onjan_service.blind_calibration import boot_calibration
 from onjan_service.runtime import Runtime
 
 
 def main():
     logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+    if boot_calibration(ROOT):
+        return
     shutdown = threading.Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: shutdown.set())
