@@ -42,7 +42,7 @@ async function poll() {
     pouring = ['pour_run','auto_run'].includes(state.job?.action) && state.job.status==='running';
     const pour=state.pour;
     pourReady=!state.auto_fill && armed && pca?.ok && !pca.stale && state.sensors.weight?.ok && !state.sensors.weight.stale && state.sensors.weight.data?.g!=null;
-    $('pour-refs').textContent=state.auto_fill ? `${state.cup_ready ? '🟢 잔을 올려주세요' : '🔴 '+(state.cup_blocker || '준비 중')} · ${state.auto_fill} · 목표 총무게 75g` : `목표 주입량: +${pour.dose_g} g`;
+    $('pour-refs').textContent=state.auto_fill ? `${state.cup_ready ? '🟢 잔을 올려주세요' : '🔴 '+(state.cup_blocker || '준비 중')} · ${state.auto_fill} · 목표 총무게 70g` : `목표 주입량: +${pour.dose_g} g`;
     $('pour-state').textContent=`${pour.phase || '대기'} ${pour.angles ? '· 명령 '+pour.angles.map(a=>Math.round(a)+'°').join(' / ') : ''} ${pour.grams!=null ? (state.auto_fill?'· 총무게 ':'· 순증가량 ')+pour.grams.toFixed(1)+' g' : ''}`;
     connected = true;
     running = state.phase === 'starting' || state.job?.status === 'running';
